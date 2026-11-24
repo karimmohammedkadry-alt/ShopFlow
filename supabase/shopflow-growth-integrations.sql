@@ -176,3 +176,15 @@ as $$
   ) from totals;
 $$;
 grant execute on function public.shopflow_get_analytics_summary(timestamptz,timestamptz) to authenticated;
+
+
+-- Public storefront pages and active catalog items.
+drop policy if exists "ShopFlow published pages public read" on public.shopflow_pages;
+create policy "ShopFlow published pages public read" on public.shopflow_pages for select to anon, authenticated
+using (is_published = true);
+drop policy if exists "ShopFlow published products public read" on public.shopflow_products;
+create policy "ShopFlow published products public read" on public.shopflow_products for select to anon, authenticated
+using (is_active = true and exists (
+  select 1 from public.shopflow_pages p
+  where p.user_id = shopflow_products.user_id and p.is_published = true
+));
