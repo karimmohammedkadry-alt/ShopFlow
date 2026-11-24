@@ -32,15 +32,17 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true); setError('');
-    const [p,c,o,a] = await Promise.all([
+    const [p,c,o,a,g] = await Promise.all([
       supabase.from('shopflow_products').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
       supabase.from('shopflow_customers').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
       supabase.from('shopflow_orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
-      supabase.from('shopflow_appointments').select('*').eq('user_id',user.id).order('starts_at',{ascending:true})
+      supabase.from('shopflow_appointments').select('*').eq('user_id',user.id).order('starts_at',{ascending:true}),
+      supabase.from('shopflow_integrations').select('public_config,status').eq('user_id',user.id).eq('provider','google_analytics_4').maybeSingle()
     ]);
-    const failed = [p,c,o,a].find(x=>x.error);
+    const failed = [p,c,o,a,g].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
-    setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []);
+    setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []); setAppointments(a.data || []);
+    setGa4Id(g.data?.public_config?.measurement_id || ''); setGa4Saved(Boolean(g.data?.public_config?.measurement_id));
     setLoading(false);
   },[supabase,user?.id]);
 
