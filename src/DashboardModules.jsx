@@ -51,12 +51,22 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       supabase.from('shopflow_customers').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_orders').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_appointments').select('*').eq('user_id',ownerId).order('starts_at',{ascending:true}),
-      supabase.from('shopflow_integrations').select('public_config,status').eq('user_id',ownerId).eq('provider','google_analytics_4').maybeSingle()
+      supabase.from('shopflow_integrations').select('public_config,status').eq('user_id',ownerId).eq('provider','google_analytics_4').maybeSingle(),
+      supabase.from('shopflow_pages').select('*').eq('user_id',ownerId).order('updated_at',{ascending:false}),
+      supabase.from('shopflow_coupons').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_campaigns').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_team_members').select('*').eq('owner_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_tracking_sites').select('*').eq('user_id',ownerId).maybeSingle(),
+      supabase.rpc('shopflow_get_analytics_summary',{p_from:new Date(Date.now()-30*86400000).toISOString(),p_to:new Date().toISOString()})
     ]);
-    const failed = [p,c,o,a,g].find(x=>x.error);
+    const failed = [p,c,o,a,g,pg,cp,cm,tm,ts,an].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
     setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []); setAppointments(a.data || []);
-    setGa4Id(g.data?.public_config?.measurement_id || ''); setGa4PropertyId(g.data?.public_config?.property_id || ''); setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
+    setGa4Id(g.data?.public_config?.measurement_id || '');
+    setGa4PropertyId(g.data?.public_config?.property_id || '');
+    setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
+    setPages(pg.data||[]); setCoupons(cp.data||[]); setCampaigns(cm.data||[]); setTeam(tm.data||[]);
+    setTrackingSite(ts.data||null); setTrackingDomain(ts.data?.allowed_origins?.[0]||''); setAnalyticsSummary(an.data||null);
     setLoading(false);
   },[supabase,ownerId]);
 
@@ -135,7 +145,9 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   async function saveAnalyticsId(e) {
     e.preventDefault(); setSaving(true); setError('');
     const cleanId=ga4Id.trim().toUpperCase();
-    if(cleanId && !/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}\n    if(ga4PropertyId.trim() && !/^\\d+$/.test(ga4PropertyId.trim())){setError(isEnglish?'Property ID must contain digits only.':'رقم الخاصية لازم يكون أرقام فقط.');setSaving(false);return;}\n    if(!cleanId && !ga4PropertyId.trim()){setError(isEnglish?'Enter a Measurement ID or Property ID.':'اكتب معرّف القياس أو رقم الخاصية.');setSaving(false);return;}
+    if(cleanId && !/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}
+    if(ga4PropertyId.trim() && !/^\d+$/.test(ga4PropertyId.trim())){setError(isEnglish?'Property ID must contain digits only.':'رقم الخاصية لازم يكون أرقام فقط.');setSaving(false);return;}
+    if(!cleanId && !ga4PropertyId.trim()){setError(isEnglish?'Enter a Measurement ID or Property ID.':'اكتب معرّف القياس أو رقم الخاصية.');setSaving(false);return;}
     const {error:e1}=await supabase.from('shopflow_integrations').upsert({
       user_id:ownerId,provider:'google_analytics_4',display_name:'Google Analytics 4',
       status:'pending',public_config:{measurement_id:cleanId,property_id:ga4PropertyId.trim()}
