@@ -21,6 +21,8 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [team,setTeam] = useState([]);
   const [trackingSite,setTrackingSite] = useState(null);
   const [analyticsSummary,setAnalyticsSummary] = useState(null);
+  const [ga4Report,setGa4Report] = useState(null);
+  const [ga4ReportLoading,setGa4ReportLoading] = useState(false);
   const [trackingDomain,setTrackingDomain] = useState('');
   const [showPageForm,setShowPageForm] = useState(false);
   const [pageForm,setPageForm] = useState({id:null,title:'',slug:'',template:'classic',hero_title:'',description:'',button_label:'تسوق الآن'});
@@ -141,6 +143,13 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       : await supabase.from('shopflow_tracking_sites').insert(payload).select().single();
     setSaving(false);if(result.error){setError(result.error.message);return;}
     setTrackingSite(result.data);setTrackingDomain(origin);
+  }
+  async function loadGa4Report() {
+    setGa4ReportLoading(true);setError('');
+    const {data,error:e1}=await supabase.functions.invoke('ga4-report',{body:{}});
+    setGa4ReportLoading(false);
+    if(e1||data?.error){setError(data?.error||e1.message);return;}
+    setGa4Report(data.report);
   }
   async function saveAnalyticsId(e) {
     e.preventDefault(); setSaving(true); setError('');
@@ -302,6 +311,8 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       <div className="stats-grid module-stats"><article className="stat card"><span>{isEnglish?'Completed orders':'الطلبات المكتملة'}</span><strong>{stats.orders}</strong></article><article className="stat card"><span>{isEnglish?'Completed order revenue':'قيمة الطلبات المكتملة'}</span><strong>{money(stats.revenue)}</strong></article><article className="stat card"><span>{isEnglish?'Tracked web revenue':'إيراد الويب المتتبع'}</span><strong>{money(analyticsSummary?.tracked_revenue||0)}</strong></article></div>
       <h4>{isEnglish?'Top traffic sources':'أهم مصادر الزيارات'}</h4><div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Source':'المصدر'}</th><th>{isEnglish?'Sessions':'الجلسات'}</th></tr></thead><tbody>{(analyticsSummary?.sources||[]).map(x=><tr key={x.source}><td>{x.source}</td><td>{x.sessions}</td></tr>)}</tbody></table></div>
       <h4>{isEnglish?'Top pages':'أكثر الصفحات زيارة'}</h4><div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Page':'الصفحة'}</th><th>{isEnglish?'Views':'المشاهدات'}</th></tr></thead><tbody>{(analyticsSummary?.pages||[]).map(x=><tr key={x.page_path}><td>{x.page_path}</td><td>{x.views}</td></tr>)}</tbody></table></div>
+      <div className="module-actions"><button className="outline" onClick={loadGa4Report} disabled={ga4ReportLoading}>{ga4ReportLoading?(isEnglish?'Loading GA4...':'جاري تحميل GA4...'):(isEnglish?'Fetch Google Analytics report':'جلب تقرير Google Analytics')}</button></div>
+      {ga4Report&&<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Source':'المصدر'}</th><th>{isEnglish?'Page':'الصفحة'}</th><th>{isEnglish?'Users':'المستخدمون'}</th><th>{isEnglish?'Sessions':'الجلسات'}</th><th>{isEnglish?'Views':'المشاهدات'}</th></tr></thead><tbody>{(ga4Report.rows||[]).map((row,i)=><tr key={i}><td>{row.dimensionValues?.[0]?.value||'—'}</td><td>{row.dimensionValues?.[1]?.value||'—'}</td><td>{row.metricValues?.[0]?.value||0}</td><td>{row.metricValues?.[1]?.value||0}</td><td>{row.metricValues?.[2]?.value||0}</td></tr>)}</tbody></table></div>}
       <p className="module-hint">{isEnglish?'Website metrics are based on events received from the installed ShopFlow tracker, not estimates. No data appears until the SQL migration, Edge Function and website script are installed.':'إحصائيات الموقع مبنية على الأحداث اللي استقبلها كود التتبع، مش تقديرات. مش هتظهر بيانات قبل تشغيل SQL ونشر Edge Function وتركيب الكود على الموقع.'}</p>
       <p className="module-hint">{isEnglish?'Store sales are calculated from completed orders. Profit is not shown because costs and fees are not yet recorded.':'مبيعات المتجر محسوبة من الطلبات المكتملة. مش بنعرض صافي الربح لأن التكاليف والرسوم لسه مش مسجلة.'}</p>
     </>}
