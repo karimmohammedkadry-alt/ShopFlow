@@ -269,3 +269,29 @@ drop policy if exists "ShopFlow analytics events owner read" on public.shopflow_
 drop policy if exists "ShopFlow analytics workspace read" on public.shopflow_analytics_events;
 create policy "ShopFlow analytics workspace read" on public.shopflow_analytics_events for select to authenticated
 using (user_id = public.shopflow_workspace_owner_id());
+
+
+-- Safe public coupon validation for independently programmed storefront checkouts.
+create or replace function public.shopflow_validate_coupon(p_owner uuid, p_code text, p_subtotal numeric)
+returns jsonb language plpgsql security definer set search_path = public
+as $$
+declare c public.shopflow_coupons%rowtype; discount_amount numeric;
+begin
+  if p_subtotal is null or p_subtotal < 0 then
+    return jsonb_build_object('valid',false,'reason','invalid_subtotal');
+  end if;
+  select * into c from public.shopflow_coupons
+  where user_id=p_owner and code=upper(trim(p_code)) and is_active=true
+    and (starts_at is null or starts_at <= now())
+    and (expires_at is null or expires_at > now())
+    and (max_redemptions is null or redeemed_count < max_redemptions)
+  limit 1;
+  if not found then return jsonb_build_object('valid',false,'reason','invalid_or_expired'); end if;
+  if p_subtotal < c.min_order then return jsonb_build_object('valid',false,'reason','minimum_order_not_met','minimum_order',c.min_order); end if;
+  discount_amount := case when c.discount_type='percent' then p_subtotal*c.discount_value/100 else c.discount_value end;
+  discount_amount := least(p_subtotal,discount_amount);
+  return jsonb_build_object('valid',true,'code',c.code,'discount_type',c.discount_type,'discount_value',c.discount_value,'discount_amount',round(discount_amount,2),'total_after_discount',round(p_subtotal-discount_amount,2));
+end;
+$$;
+revoke all on function public.shopflow_validate_coupon(uuid,text,numeric) from public;
+grant execute on function public.shopflow_validate_coupon(uuid,text,numeric) to anon, authenticated;
