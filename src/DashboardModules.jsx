@@ -9,7 +9,7 @@ const labels = {
 const money = (value, currency='EGP') => new Intl.NumberFormat('ar-EG', { style:'currency', currency, maximumFractionDigits:2 }).format(Number(value || 0));
 const orderStates = { new:'جديد', confirmed:'مؤكد', preparing:'قيد التجهيز', shipped:'تم الشحن', completed:'مكتمل', cancelled:'ملغي' };
 
-export default function DashboardModules({ supabase, user, profile, activeSection, setActiveSection, setMessage, setEditingProfile }) {
+export default function DashboardModules({ supabase, user, profile, activeSection, setActiveSection, setMessage, setEditingProfile, language='ar' }) {
   const [products,setProducts] = useState([]);
   const [customers,setCustomers] = useState([]);
   const [orders,setOrders] = useState([]);
@@ -20,6 +20,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [showCustomer,setShowCustomer] = useState(false);
   const [showOrder,setShowOrder] = useState(false);
   const [productForm,setProductForm] = useState({name:'',category:'',description:'',price:'',stock:'0'});
+  const [productExtras,setProductExtras] = useState({});
   const [customerForm,setCustomerForm] = useState({full_name:'',email:'',phone:'',notes:''});
   const [orderForm,setOrderForm] = useState({customer_id:'',total:'',currency:'EGP',notes:''});
 
@@ -50,11 +51,11 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     e.preventDefault(); setSaving(true); setError('');
     const {error:e1}=await supabase.from('shopflow_products').insert({
       user_id:user.id, name:productForm.name.trim(), category:productForm.category.trim(),
-      description:productForm.description.trim(), price:Number(productForm.price), stock:Number(productForm.stock||0)
+      description:productForm.description.trim(), price:Number(productForm.price), stock:Number(productForm.stock||0), options:productExtras
     });
     setSaving(false);
     if(e1){setError(e1.message);return;}
-    setProductForm({name:'',category:'',description:'',price:'',stock:'0'});setShowProduct(false);await load();
+    setProductForm({name:'',category:'',description:'',price:'',stock:'0'});setProductExtras({});setShowProduct(false);await load();
   }
   async function changeStock(product, value) {
     const stock = Math.max(0,Number(value)||0);
@@ -91,9 +92,20 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     if(e1)setError(e1.message);else await load();
   }
 
-  const title = labels[activeSection] || 'لوحة المتجر';
-  const isRestaurant = profile?.business_type==='restaurant';
-  const productLabel = isRestaurant?'الصنف':'المنتج';
+  const isEnglish = language === 'en';
+  const industry = profile?.business_type || 'general';
+  const industryFields = {
+    restaurant:[['portion', 'حجم الوجبة'],['prep_minutes','وقت التحضير بالدقائق'],['dietary','نوع الوجبة']],
+    fashion:[['size','المقاسات'],['color','الألوان'],['material','الخامة']],
+    electronics:[['brand','الماركة'],['model','الموديل'],['warranty_months','الضمان بالشهور']],
+    beauty:[['skin_type','نوع البشرة/الشعر'],['volume','الحجم'],['ingredients','المكونات']],
+    services:[['duration_minutes','مدة الخدمة بالدقائق'],['delivery_mode','طريقة تقديم الخدمة'],['staff_name','مقدم الخدمة']],
+    general:[['sku','رمز المنتج SKU'],['supplier','المورد'],['unit','وحدة القياس']]
+  };
+  const title = isEnglish ? ({overview:'Overview',catalog:'Products & menu',orders:'Orders',customers:'Customers',inventory:'Inventory',marketing:'Marketing & offers',reports:'Analytics & reports',website:'Website builder',integrations:'Integrations',staff:'Team & permissions',settings:'Store settings'}[activeSection] || 'Store dashboard') : (labels[activeSection] || 'لوحة المتجر');
+  const isRestaurant = industry==='restaurant';
+  const productLabel = isRestaurant?(isEnglish?'Menu item':'الصنف'):(isEnglish?'Product':'المنتج');
+  const fieldList = industryFields[industry] || industryFields.general;
 
   if(loading) return <section className="module-panel card"><div className="loader"/><p style={{textAlign:'center'}}>جاري تحميل بيانات متجرك...</p></section>;
 
@@ -119,6 +131,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
         <label>اسم {productLabel} *</label><input required maxLength="120" value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/>
         <label>التصنيف</label><input value={productForm.category} onChange={e=>setProductForm({...productForm,category:e.target.value})}/>
         <label>الوصف</label><textarea rows="2" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/>
+        <div className="industry-fields"><strong>${isEnglish ? "Industry-specific details" : "بيانات خاصة بنشاطك"}</strong>{fieldList.map(([key,label])=><div key={key}><label>{isEnglish?({portion:'Portion',prep_minutes:'Prep time (minutes)',dietary:'Meal type',size:'Sizes',color:'Colors',material:'Material',brand:'Brand',model:'Model',warranty_months:'Warranty (months)',skin_type:'Skin / hair type',volume:'Volume',ingredients:'Ingredients',duration_minutes:'Duration (minutes)',delivery_mode:'Service mode',staff_name:'Staff member',sku:'SKU',supplier:'Supplier',unit:'Unit'}[key]||label):label}</label><input value={productExtras[key]||''} onChange={e=>setProductExtras(v=>({...v,[key]:e.target.value}))}/></div>)}</div>
         <div className="module-form-grid"><div><label>السعر *</label><input required type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})}/></div><div><label>الكمية المتاحة</label><input type="number" min="0" step="1" value={productForm.stock} onChange={e=>setProductForm({...productForm,stock:e.target.value})}/></div></div>
         <div className="module-actions"><button className="primary" disabled={saving}>{saving?'جاري الحفظ...':'حفظ '+productLabel}</button><button type="button" className="outline" onClick={()=>setShowProduct(false)}>إلغاء</button></div>
       </form>}
