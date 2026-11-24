@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+<g fill="none" stroke="#67152f" stroke-width="24" stroke-linejoin="miter">
+<path d="M250 25 365 92 337 108 250 58 130 128 130 372 250 442 337 392 365 408 250 475 95 385 95 115Z"/>
+<path d="M250 105 330 151 305 166 250 135 170 181 170 319 250 365 305 334 330 349 250 395 135 329 135 171Z"/>
+</g>
+<path d="m215 218-28 22 28 22m70-44 28 22-28 22m-20-56-16 68" fill="none" stroke="#67152f" stroke-width="13" stroke-linecap="square"/>
+<text x="250" y="560" text-anchor="middle" font-family="Arial,sans-serif" font-size="1" fill="#67152f">CODEX</text>
+</svg>
