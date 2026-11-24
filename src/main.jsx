@@ -121,7 +121,7 @@ function App() {
       <p className="muted">{otpStep ? 'أدخل رمز التأكيد المكوّن من 6 أرقام المرسل إلى بريدك الإلكتروني.' : 'ابدأ إدارة متجرك الإلكتروني من لوحة واحدة بسيطة.'}</p>
       {otpStep ? <form onSubmit={verifyEmail}>
         <label>رمز التأكيد (OTP)</label>
-        <input className="otp-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" value={otp} onChange={e=>setOtp(e.target.value.replace(/\\D/g, '').slice(0,6))} placeholder="123456" required />
+        <input className="otp-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g, '').slice(0,6))} placeholder="123456" required />
         <button className="primary" disabled={busy || otp.length !== 6}>{busy ? 'جاري التحقق...' : 'تأكيد الحساب والدخول'}</button>
         <button type="button" className="text-button resend" onClick={resendOtp} disabled={busy}>إعادة إرسال الرمز</button>
       </form> : <form onSubmit={authenticate}>
