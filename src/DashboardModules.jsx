@@ -107,20 +107,20 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const productLabel = isRestaurant?(isEnglish?'Menu item':'الصنف'):(isEnglish?'Product':'المنتج');
   const fieldList = industryFields[industry] || industryFields.general;
 
-  if(loading) return <section className="module-panel card"><div className="loader"/><p style={{textAlign:'center'}}>جاري تحميل بيانات متجرك...</p></section>;
+  if(loading) return <section className="module-panel card"><div className="loader"/><p style={{textAlign:'center'}}>{isEnglish?'Loading your store data...':'جاري تحميل بيانات متجرك...'}</p></section>;
 
   return <section className="module-panel card">
     <div className="panel-heading">
-      <div><h3>{title}</h3><p>بيانات متجرك الفعلية · {profile?.store_name || 'ShopFlow'}</p></div>
+      <div><h3>{title}</h3><p>{isEnglish?'Live store data':'بيانات متجرك الفعلية'} · {profile?.store_name || 'ShopFlow'}</p></div>
       <button className="outline small" onClick={load}>↻ تحديث</button>
     </div>
     {error && <p className="notice" role="alert">{error}</p>}
     {activeSection==='overview' && <>
       <div className="stats-grid module-stats">
-        <article className="stat card"><span>إجمالي الطلبات</span><strong>{stats.orders}</strong><small>طلبات محفوظة في قاعدة البيانات</small></article>
-        <article className="stat card"><span>{isRestaurant?'أصناف المنيو':'المنتجات'}</span><strong>{stats.products}</strong><small>عناصر الكتالوج المسجلة</small></article>
-        <article className="stat card"><span>العملاء</span><strong>{stats.customers}</strong><small>ملفات العملاء المسجلة</small></article>
-        <article className="stat card"><span>مبيعات الطلبات المكتملة</span><strong>{money(stats.revenue)}</strong><small>محسوبة من الطلبات المكتملة فقط</small></article>
+        <article className="stat card"><span>{isEnglish?'Total orders':'إجمالي الطلبات'}</span><strong>{stats.orders}</strong><small>{isEnglish?'Orders saved in your database':'طلبات محفوظة في قاعدة البيانات'}</small></article>
+        <article className="stat card"><span>{isRestaurant?(isEnglish?'Menu items':'أصناف المنيو'):(isEnglish?'Products':'المنتجات')}</span><strong>{stats.products}</strong><small>{isEnglish?'Catalog entries':'عناصر الكتالوج المسجلة'}</small></article>
+        <article className="stat card"><span>{isEnglish?'Customers':'العملاء'}</span><strong>{stats.customers}</strong><small>{isEnglish?'Customer records':'ملفات العملاء المسجلة'}</small></article>
+        <article className="stat card"><span>{isEnglish?'Completed order sales':'مبيعات الطلبات المكتملة'}</span><strong>{money(stats.revenue)}</strong><small>{isEnglish?'Completed orders only':'محسوبة من الطلبات المكتملة فقط'}</small></article>
       </div>
       <div className="module-actions"><button className="primary" onClick={()=>setActiveSection('catalog')}>＋ إضافة {productLabel}</button><button className="outline" onClick={()=>setActiveSection('orders')}>عرض الطلبات</button><button className="outline" onClick={()=>setActiveSection('customers')}>إدارة العملاء</button></div>
       <p className="module-hint">الأرقام هنا مبنية على سجلات حسابك في قاعدة البيانات، وليست بيانات تجريبية.</p>
@@ -131,7 +131,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
         <label>اسم {productLabel} *</label><input required maxLength="120" value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/>
         <label>التصنيف</label><input value={productForm.category} onChange={e=>setProductForm({...productForm,category:e.target.value})}/>
         <label>الوصف</label><textarea rows="2" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/>
-        <div className="industry-fields"><strong>${isEnglish ? "Industry-specific details" : "بيانات خاصة بنشاطك"}</strong>{fieldList.map(([key,label])=><div key={key}><label>{isEnglish?({portion:'Portion',prep_minutes:'Prep time (minutes)',dietary:'Meal type',size:'Sizes',color:'Colors',material:'Material',brand:'Brand',model:'Model',warranty_months:'Warranty (months)',skin_type:'Skin / hair type',volume:'Volume',ingredients:'Ingredients',duration_minutes:'Duration (minutes)',delivery_mode:'Service mode',staff_name:'Staff member',sku:'SKU',supplier:'Supplier',unit:'Unit'}[key]||label):label}</label><input value={productExtras[key]||''} onChange={e=>setProductExtras(v=>({...v,[key]:e.target.value}))}/></div>)}</div>
+        <div className="industry-fields"><strong>{isEnglish ? "Industry-specific details" : "بيانات خاصة بنشاطك"}</strong>{fieldList.map(([key,label])=><div key={key}><label>{isEnglish?({portion:'Portion',prep_minutes:'Prep time (minutes)',dietary:'Meal type',size:'Sizes',color:'Colors',material:'Material',brand:'Brand',model:'Model',warranty_months:'Warranty (months)',skin_type:'Skin / hair type',volume:'Volume',ingredients:'Ingredients',duration_minutes:'Duration (minutes)',delivery_mode:'Service mode',staff_name:'Staff member',sku:'SKU',supplier:'Supplier',unit:'Unit'}[key]||label):label}</label><input value={productExtras[key]||''} onChange={e=>setProductExtras(v=>({...v,[key]:e.target.value}))}/></div>)}</div>
         <div className="module-form-grid"><div><label>السعر *</label><input required type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})}/></div><div><label>الكمية المتاحة</label><input type="number" min="0" step="1" value={productForm.stock} onChange={e=>setProductForm({...productForm,stock:e.target.value})}/></div></div>
         <div className="module-actions"><button className="primary" disabled={saving}>{saving?'جاري الحفظ...':'حفظ '+productLabel}</button><button type="button" className="outline" onClick={()=>setShowProduct(false)}>إلغاء</button></div>
       </form>}
