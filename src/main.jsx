@@ -9,7 +9,7 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 const HOURS = 48;
 
 function Brand() {
-  return <div className="brand"><img src="/codex-logo.svg" alt="CODEX" /><span className="brand-powered">Powered by <strong>CODEX</strong></span></div>;
+  return <div className="brand"><img src="/codex-logo.svg" alt="CODEX" /><span className="brand-name">ShopFlow</span><span className="brand-powered">Powered by <strong>CODEX</strong></span></div>;
 }
 
 function App() {
