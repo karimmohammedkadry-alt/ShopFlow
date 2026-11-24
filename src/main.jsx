@@ -131,7 +131,8 @@ function App() {
   }
 
   async function loadTrial() {
-    await supabase.functions.invoke('accept-team-invite',{body:{}});\n    const { data, error } = await supabase.rpc('get_my_workspace_trial');
+    await supabase.functions.invoke('accept-team-invite',{body:{}});
+    const { data, error } = await supabase.rpc('get_my_workspace_trial');
     if (error) setMessage('تعذر تحميل حالة التجربة. تأكد من تشغيل ملف إعداد قاعدة البيانات في Supabase.');
     else setTrial(data);
   }
