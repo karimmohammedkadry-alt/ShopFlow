@@ -22,7 +22,8 @@ function App() {
   const [trial, setTrial] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);\n  const [now, setNow] = useState(Date.now());
+  const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(Date.now());
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [storeName, setStoreName] = useState('');
@@ -45,7 +46,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (session?.user) loadTrial();
+    if (session?.user) { loadTrial(); loadProfile(); }
   }, [session]);
 
   async function loadProfile() {
@@ -181,7 +182,11 @@ function App() {
 
   const startedAt = trial?.started_at ? new Date(trial.started_at) : null;
   const expiresAt = startedAt ? new Date(startedAt.getTime() + HOURS*60*60*1000) : null;
-  const remaining = expiresAt ? Math.max(0, expiresAt.getTime() - now) : 0;\n  const expired = expiresAt && remaining === 0;\n  const hh = String(Math.floor(remaining / 3600000)).padStart(2,'0');\n  const mm = String(Math.floor((remaining % 3600000) / 60000)).padStart(2,'0');\n  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
+  const remaining = expiresAt ? Math.max(0, expiresAt.getTime() - now) : 0;
+  const expired = expiresAt && remaining === 0;
+  const hh = String(Math.floor(remaining / 3600000)).padStart(2,'0');
+  const mm = String(Math.floor((remaining % 3600000) / 60000)).padStart(2,'0');
+  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
 
   return <main className="dashboard">
     <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span><button className="outline small" onClick={()=>setEditingProfile(true)}>إعدادات المتجر</button><button className="outline small" onClick={logout}>تسجيل الخروج</button></div></header>
