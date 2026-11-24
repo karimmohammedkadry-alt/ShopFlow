@@ -22,7 +22,7 @@ function App() {
   const [trial, setTrial] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);\n  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -138,14 +138,14 @@ function App() {
 
   const startedAt = trial?.started_at ? new Date(trial.started_at) : null;
   const expiresAt = startedAt ? new Date(startedAt.getTime() + HOURS*60*60*1000) : null;
-  const expired = expiresAt && Date.now() >= expiresAt.getTime();
+  const remaining = expiresAt ? Math.max(0, expiresAt.getTime() - now) : 0;\n  const expired = expiresAt && remaining === 0;\n  const hh = String(Math.floor(remaining / 3600000)).padStart(2,'0');\n  const mm = String(Math.floor((remaining % 3600000) / 60000)).padStart(2,'0');\n  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
 
   return <main className="dashboard">
     <header className="topbar"><Brand /><div className="user-menu"><span>{session.user.email}</span><button className="outline small" onClick={logout}>تسجيل الخروج</button></div></header>
     <section className="welcome"><div><div className="eyebrow">لوحة التحكم</div><h1>أهلاً بك في ShopFlow</h1><p className="muted">ابدأ رحلتك في إدارة متجرك الإلكتروني.</p></div><span className="avatar">{session.user.email?.[0]?.toUpperCase()}</span></section>
     {expired ? <section className="expired card"><div className="status-icon">⌛</div><h2>انتهت فترة التجربة</h2><p>انتهت فترة التجربة المجانية لمدة 48 ساعة لهذا الحساب.</p><a className="primary link-button" href="mailto:hello@shopflow.example?subject=طلب%20تفعيل%20ShopFlow">تواصل معنا لطلب الخدمة</a></section>
     : !trial?.started_at ? <section className="trial-card card"><span className="pill">تجربة مجانية</span><h2>جرّب ShopFlow لمدة 48 ساعة</h2><p>استكشف لوحة التحكم وابدأ تجربة إدارة متجرك. يبدأ العدّ التنازلي فقط عند الضغط على الزر، والتجربة متاحة مرة واحدة لكل حساب.</p><button className="primary start" onClick={startTrial} disabled={busy}>{busy?'جاري بدء التجربة...':'ابدأ تجربتي المجانية'} <span>←</span></button><div className="fine-print">48 ساعة من لحظة البدء · لا يمكن إعادة ضبط التجربة</div></section>
-    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك التجريبية</h2><p className="muted">متبقي من وقت التجربة: <strong>{Math.max(0,Math.ceil((expiresAt-Date.now())/3600000))} ساعة تقريباً</strong></p></div><div className="clock">48h</div></section><section className="stats-grid"><article className="stat card"><span>الطلبات</span><strong>—</strong><small>ستظهر بياناتك هنا</small></article><article className="stat card"><span>المنتجات</span><strong>—</strong><small>إدارة كتالوج متجرك</small></article><article className="stat card"><span>المبيعات</span><strong>—</strong><small>ملخص أداء المتجر</small></article></section><section className="empty card"><div className="empty-icon">✦</div><h3>مساحتك جاهزة للانطلاق</h3><p className="muted">سيتم تفعيل أدوات إدارة المتجر عند إعداد الخدمة.</p></section></>}
+    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك التجريبية</h2><p className="muted">متبقي من وقت التجربة: <strong>{hh}:{mm}:{ss}</strong></p></div><div className="clock clock-live" dir="ltr"><strong>{hh}:{mm}:{ss}</strong><small>متبقي</small></div></section><section className="stats-grid"><article className="stat card"><span>الطلبات</span><strong>—</strong><small>ستظهر بياناتك هنا</small></article><article className="stat card"><span>المنتجات</span><strong>—</strong><small>إدارة كتالوج متجرك</small></article><article className="stat card"><span>المبيعات</span><strong>—</strong><small>ملخص أداء المتجر</small></article></section><section className="empty card"><div className="empty-icon">✦</div><h3>مساحتك جاهزة للانطلاق</h3><p className="muted">سيتم تفعيل أدوات إدارة المتجر عند إعداد الخدمة.</p></section></>}
     {message && <p className="notice">{message}</p>}
   </main>;
 }
