@@ -9,7 +9,8 @@ const labels = {
 const money = (value, currency='EGP') => new Intl.NumberFormat('ar-EG', { style:'currency', currency, maximumFractionDigits:2 }).format(Number(value || 0));
 const orderStates = { new:'جديد', confirmed:'مؤكد', preparing:'قيد التجهيز', shipped:'تم الشحن', completed:'مكتمل', cancelled:'ملغي' };
 
-export default function DashboardModules({ supabase, user, profile, activeSection, setActiveSection, setMessage, setEditingProfile, language='ar' }) {
+export default function DashboardModules({ supabase, user, profile, activeSection, setActiveSection, setMessage, setEditingProfile, language='ar', workspaceOwnerId=null, isStoreOwner=true }) {
+  const ownerId=workspaceOwnerId||user?.id;
   const [products,setProducts] = useState([]);
   const [customers,setCustomers] = useState([]);
   const [orders,setOrders] = useState([]);
@@ -46,18 +47,18 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     if (!user?.id) return;
     setLoading(true); setError('');
     const [p,c,o,a,g,pg,cp,cm,tm,ts,an] = await Promise.all([
-      supabase.from('shopflow_products').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
-      supabase.from('shopflow_customers').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
-      supabase.from('shopflow_orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
-      supabase.from('shopflow_appointments').select('*').eq('user_id',user.id).order('starts_at',{ascending:true}),
-      supabase.from('shopflow_integrations').select('public_config,status').eq('user_id',user.id).eq('provider','google_analytics_4').maybeSingle()
+      supabase.from('shopflow_products').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_customers').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_orders').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
+      supabase.from('shopflow_appointments').select('*').eq('user_id',ownerId).order('starts_at',{ascending:true}),
+      supabase.from('shopflow_integrations').select('public_config,status').eq('user_id',ownerId).eq('provider','google_analytics_4').maybeSingle()
     ]);
     const failed = [p,c,o,a,g].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
     setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []); setAppointments(a.data || []);
     setGa4Id(g.data?.public_config?.measurement_id || ''); setGa4PropertyId(g.data?.public_config?.property_id || ''); setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
     setLoading(false);
-  },[supabase,user?.id]);
+  },[supabase,ownerId]);
 
   useEffect(()=>{ load(); },[load]);
 
@@ -72,10 +73,10 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     e.preventDefault(); setSaving(true); setError('');
     const slug=pageForm.slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'');
     if(!slug){setError(isEnglish?'Use an English URL slug (a-z, 0-9, hyphens).':'اكتب رابط الصفحة بحروف إنجليزية وأرقام وشرطة فقط.');setSaving(false);return;}
-    const payload={user_id:user.id,title:pageForm.title.trim(),slug,template:pageForm.template,
+    const payload={user_id:ownerId,title:pageForm.title.trim(),slug,template:pageForm.template,
       content:{hero_title:pageForm.hero_title,description:pageForm.description,button_label:pageForm.button_label}};
     const result=pageForm.id
-      ? await supabase.from('shopflow_pages').update({...payload,updated_at:new Date().toISOString()}).eq('id',pageForm.id).eq('user_id',user.id)
+      ? await supabase.from('shopflow_pages').update({...payload,updated_at:new Date().toISOString()}).eq('id',pageForm.id).eq('user_id',ownerId)
       : await supabase.from('shopflow_pages').insert(payload);
     setSaving(false);if(result.error){setError(result.error.message);return;}
     setShowPageForm(false);setPageForm({id:null,title:'',slug:'',template:'classic',hero_title:'',description:'',button_label:'تسوق الآن'});await load();
@@ -86,17 +87,17 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     setShowPageForm(true);
   }
   async function togglePage(page) {
-    const {error:e1}=await supabase.from('shopflow_pages').update({is_published:!page.is_published,updated_at:new Date().toISOString()}).eq('id',page.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_pages').update({is_published:!page.is_published,updated_at:new Date().toISOString()}).eq('id',page.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function deletePage(page) {
     if(!window.confirm((isEnglish?'Delete page ':'حذف الصفحة ')+page.title+'?'))return;
-    const {error:e1}=await supabase.from('shopflow_pages').delete().eq('id',page.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_pages').delete().eq('id',page.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function addCoupon(e) {
     e.preventDefault();setSaving(true);setError('');
-    const payload={user_id:user.id,code:couponForm.code.trim().toUpperCase(),discount_type:couponForm.discount_type,
+    const payload={user_id:ownerId,code:couponForm.code.trim().toUpperCase(),discount_type:couponForm.discount_type,
       discount_value:Number(couponForm.discount_value),min_order:Number(couponForm.min_order||0),
       expires_at:couponForm.expires_at?new Date(couponForm.expires_at).toISOString():null};
     const {error:e1}=await supabase.from('shopflow_coupons').insert(payload);
@@ -104,12 +105,12 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     setCouponForm({code:'',discount_type:'percent',discount_value:'10',min_order:'0',expires_at:''});await load();
   }
   async function toggleCoupon(coupon) {
-    const {error:e1}=await supabase.from('shopflow_coupons').update({is_active:!coupon.is_active}).eq('id',coupon.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_coupons').update({is_active:!coupon.is_active}).eq('id',coupon.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function addCampaign(e) {
     e.preventDefault();setSaving(true);setError('');
-    const {error:e1}=await supabase.from('shopflow_campaigns').insert({...campaignForm,user_id:user.id});
+    const {error:e1}=await supabase.from('shopflow_campaigns').insert({...campaignForm,user_id:ownerId});
     setSaving(false);if(e1){setError(e1.message);return;}
     setCampaignForm({name:'',channel:'email',message:''});await load();
   }
@@ -124,9 +125,9 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     e.preventDefault();setSaving(true);setError('');
     let origin='';
     try{origin=new URL(trackingDomain.includes('://')?trackingDomain:'https://'+trackingDomain).origin;}catch{setError(isEnglish?'Enter a valid website domain.':'اكتب دومين صحيح.');setSaving(false);return;}
-    const payload={user_id:user.id,allowed_origins:[origin],is_active:true};
+    const payload={user_id:ownerId,allowed_origins:[origin],is_active:true};
     const result=trackingSite
-      ? await supabase.from('shopflow_tracking_sites').update({...payload,updated_at:new Date().toISOString()}).eq('user_id',user.id).select().single()
+      ? await supabase.from('shopflow_tracking_sites').update({...payload,updated_at:new Date().toISOString()}).eq('user_id',ownerId).select().single()
       : await supabase.from('shopflow_tracking_sites').insert(payload).select().single();
     setSaving(false);if(result.error){setError(result.error.message);return;}
     setTrackingSite(result.data);setTrackingDomain(origin);
@@ -136,7 +137,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     const cleanId=ga4Id.trim().toUpperCase();
     if(cleanId && !/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}\n    if(ga4PropertyId.trim() && !/^\\d+$/.test(ga4PropertyId.trim())){setError(isEnglish?'Property ID must contain digits only.':'رقم الخاصية لازم يكون أرقام فقط.');setSaving(false);return;}\n    if(!cleanId && !ga4PropertyId.trim()){setError(isEnglish?'Enter a Measurement ID or Property ID.':'اكتب معرّف القياس أو رقم الخاصية.');setSaving(false);return;}
     const {error:e1}=await supabase.from('shopflow_integrations').upsert({
-      user_id:user.id,provider:'google_analytics_4',display_name:'Google Analytics 4',
+      user_id:ownerId,provider:'google_analytics_4',display_name:'Google Analytics 4',
       status:'pending',public_config:{measurement_id:cleanId,property_id:ga4PropertyId.trim()}
     },{onConflict:'user_id,provider'});
     setSaving(false);
@@ -146,7 +147,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   async function addProduct(e) {
     e.preventDefault(); setSaving(true); setError('');
     const {error:e1}=await supabase.from('shopflow_products').insert({
-      user_id:user.id, name:productForm.name.trim(), category:productForm.category.trim(),
+      user_id:ownerId, name:productForm.name.trim(), category:productForm.category.trim(),
       description:productForm.description.trim(), price:Number(productForm.price), stock:Number(productForm.stock||0), options:productExtras
     });
     setSaving(false);
@@ -155,17 +156,17 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   }
   async function changeStock(product, value) {
     const stock = Math.max(0,Number(value)||0);
-    const {error:e1}=await supabase.from('shopflow_products').update({stock,updated_at:new Date().toISOString()}).eq('id',product.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_products').update({stock,updated_at:new Date().toISOString()}).eq('id',product.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function deleteProduct(product) {
     if(!window.confirm('حذف المنتج «'+product.name+'»؟'))return;
-    const {error:e1}=await supabase.from('shopflow_products').delete().eq('id',product.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_products').delete().eq('id',product.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function addCustomer(e) {
     e.preventDefault();setSaving(true);setError('');
-    const {error:e1}=await supabase.from('shopflow_customers').insert({...customerForm,user_id:user.id});
+    const {error:e1}=await supabase.from('shopflow_customers').insert({...customerForm,user_id:ownerId});
     setSaving(false);
     if(e1){setError(e1.message);return;}
     setCustomerForm({full_name:'',email:'',phone:'',notes:''});setShowCustomer(false);await load();
@@ -174,7 +175,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     e.preventDefault();setSaving(true);setError('');
     const customer=customers.find(c=>c.id===orderForm.customer_id);
     const {error:e1}=await supabase.from('shopflow_orders').insert({
-      user_id:user.id,customer_id:customer?.id||null,total:Number(orderForm.total),
+      user_id:ownerId,customer_id:customer?.id||null,total:Number(orderForm.total),
       currency:orderForm.currency,notes:orderForm.notes,
       customer_snapshot:customer?{full_name:customer.full_name,email:customer.email,phone:customer.phone}:{},
       items:[]
@@ -186,7 +187,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   async function addAppointment(e) {
     e.preventDefault(); setSaving(true); setError('');
     const {error:e1}=await supabase.from('shopflow_appointments').insert({
-      user_id:user.id, customer_name:appointmentForm.customer_name.trim(),
+      user_id:ownerId, customer_name:appointmentForm.customer_name.trim(),
       service_name:appointmentForm.service_name.trim(),
       starts_at:new Date(appointmentForm.starts_at).toISOString(), notes:appointmentForm.notes
     });
@@ -195,11 +196,11 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     setAppointmentForm({customer_name:'',service_name:'',starts_at:'',notes:''});setShowAppointment(false);await load();
   }
   async function updateAppointmentStatus(item,status) {
-    const {error:e1}=await supabase.from('shopflow_appointments').update({status}).eq('id',item.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_appointments').update({status}).eq('id',item.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
   async function changeOrderStatus(order,status) {
-    const {error:e1}=await supabase.from('shopflow_orders').update({status,updated_at:new Date().toISOString()}).eq('id',order.id).eq('user_id',user.id);
+    const {error:e1}=await supabase.from('shopflow_orders').update({status,updated_at:new Date().toISOString()}).eq('id',order.id).eq('user_id',ownerId);
     if(e1)setError(e1.message);else await load();
   }
 
@@ -296,7 +297,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     {activeSection==='website'&&<>
       <div className="module-actions"><button className="primary" onClick={()=>{setPageForm({id:null,title:'',slug:'',template:industry==='restaurant'?'restaurant':industry==='fashion'?'fashion':industry==='beauty'?'beauty':'classic',hero_title:'',description:'',button_label:'تسوق الآن'});setShowPageForm(v=>!v)}}>＋ {isEnglish?'Create page':'إنشاء صفحة'}</button><span className="module-hint">{isEnglish?'Published pages can be opened on a public URL.':'الصفحات المنشورة بيكون لها رابط عام.'}</span></div>
       {showPageForm&&<form className="module-form" onSubmit={savePage}><h4>{isEnglish?'Page editor':'محرر الصفحة'}</h4><label>{isEnglish?'Page name':'اسم الصفحة'}</label><input required value={pageForm.title} onChange={e=>setPageForm({...pageForm,title:e.target.value})}/><label>{isEnglish?'URL slug (English)':'رابط الصفحة بالإنجليزية'}</label><input required pattern="[A-Za-z0-9-]+" value={pageForm.slug} onChange={e=>setPageForm({...pageForm,slug:e.target.value})} placeholder="summer-collection"/><label>{isEnglish?'Template':'القالب'}</label><select value={pageForm.template} onChange={e=>setPageForm({...pageForm,template:e.target.value})}><option value="classic">{isEnglish?'Classic store':'متجر كلاسيكي'}</option><option value="restaurant">{isEnglish?'Restaurant menu':'منيو مطعم'}</option><option value="fashion">{isEnglish?'Fashion collection':'مجموعة أزياء'}</option><option value="beauty">{isEnglish?'Beauty boutique':'متجر تجميل'}</option><option value="services">{isEnglish?'Services landing page':'صفحة خدمات'}</option></select><label>{isEnglish?'Main headline':'العنوان الرئيسي'}</label><input value={pageForm.hero_title} onChange={e=>setPageForm({...pageForm,hero_title:e.target.value})}/><label>{isEnglish?'Description':'الوصف'}</label><textarea rows="3" value={pageForm.description} onChange={e=>setPageForm({...pageForm,description:e.target.value})}/><label>{isEnglish?'Button label':'نص الزر'}</label><input value={pageForm.button_label} onChange={e=>setPageForm({...pageForm,button_label:e.target.value})}/><div className="module-actions"><button className="primary" disabled={saving}>{isEnglish?'Save page':'حفظ الصفحة'}</button><button type="button" className="outline" onClick={()=>setShowPageForm(false)}>{isEnglish?'Cancel':'إلغاء'}</button></div></form>}
-      {pages.length===0?<div className="module-empty">{isEnglish?'No pages created yet.':'لم تنشئ صفحات بعد.'}</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Page':'الصفحة'}</th><th>{isEnglish?'Template':'القالب'}</th><th>{isEnglish?'Status':'الحالة'}</th><th>{isEnglish?'Actions':'إجراءات'}</th></tr></thead><tbody>{pages.map(p=><tr key={p.id}><td><b>{p.title}</b><small>/{p.slug}</small></td><td>{p.template}</td><td>{p.is_published?(isEnglish?'Published':'منشورة'):(isEnglish?'Draft':'مسودة')}</td><td><button className="outline small" onClick={()=>editPage(p)}>{isEnglish?'Edit':'تعديل'}</button> <button className="outline small" onClick={()=>togglePage(p)}>{p.is_published?(isEnglish?'Unpublish':'إلغاء النشر'):(isEnglish?'Publish':'نشر')}</button> <button className="danger-link" onClick={()=>deletePage(p)}>{isEnglish?'Delete':'حذف'}</button> {p.is_published&&<a href={'/store/'+user.id+'/'+p.slug} target="_blank" rel="noreferrer">{isEnglish?'Open':'فتح'}</a>}</td></tr>)}</tbody></table></div>}
+      {pages.length===0?<div className="module-empty">{isEnglish?'No pages created yet.':'لم تنشئ صفحات بعد.'}</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Page':'الصفحة'}</th><th>{isEnglish?'Template':'القالب'}</th><th>{isEnglish?'Status':'الحالة'}</th><th>{isEnglish?'Actions':'إجراءات'}</th></tr></thead><tbody>{pages.map(p=><tr key={p.id}><td><b>{p.title}</b><small>/{p.slug}</small></td><td>{p.template}</td><td>{p.is_published?(isEnglish?'Published':'منشورة'):(isEnglish?'Draft':'مسودة')}</td><td><button className="outline small" onClick={()=>editPage(p)}>{isEnglish?'Edit':'تعديل'}</button> <button className="outline small" onClick={()=>togglePage(p)}>{p.is_published?(isEnglish?'Unpublish':'إلغاء النشر'):(isEnglish?'Publish':'نشر')}</button> <button className="danger-link" onClick={()=>deletePage(p)}>{isEnglish?'Delete':'حذف'}</button> {p.is_published&&<a href={'/store/'+ownerId+'/'+p.slug} target="_blank" rel="noreferrer">{isEnglish?'Open':'فتح'}</a>}</td></tr>)}</tbody></table></div>}
       <divider />
       <h4>{isEnglish?'Independent website tracking':'تتبع موقعك المستقل'}</h4>
       <p className="module-hint">{isEnglish?'Enter the exact origin of your independently coded website. Install the script below only after obtaining analytics consent where required.':'اكتب عنوان الموقع المستقل بدقة. ركّب كود التتبع بعد الحصول على موافقة التحليلات عند الحاجة.'}</p>
@@ -308,7 +309,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     </>}
     {activeSection==='integrations'&&<div className="feature-grid">{[['الدفع الإلكتروني','بوابات الدفع تحتاج حساب تاجر ومفاتيح سرية محفوظة في الخادم.'],['الشحن والتوصيل','التوصيل يحتاج ربط شركة الشحن وحسابها التجاري.'],['واتساب','الربط الرسمي يحتاج إعداد WhatsApp Business Platform.'],['التحليلات','يمكن إضافة أدوات التحليلات بعد ضبط الموافقة والخصوصية.']].map(([name,desc])=><article key={name}><b>{name}</b><p>{desc}</p><span>غير متصل</span></article>)}</div>}
     {activeSection==='staff'&&<>
-      <form className="module-form" onSubmit={inviteMember}><h4>{isEnglish?'Invite a teammate':'دعوة عضو للفريق'}</h4><label>{isEnglish?'Email address':'البريد الإلكتروني'}</label><input type="email" required value={inviteForm.email} onChange={e=>setInviteForm({...inviteForm,email:e.target.value})}/><label>{isEnglish?'Role':'الدور'}</label><select value={inviteForm.role} onChange={e=>setInviteForm({...inviteForm,role:e.target.value})}><option value="manager">{isEnglish?'Manager':'مدير'}</option><option value="catalog">{isEnglish?'Catalog':'إدارة المنتجات'}</option><option value="orders">{isEnglish?'Orders':'الطلبات'}</option><option value="support">{isEnglish?'Support':'دعم العملاء'}</option><option value="staff">{isEnglish?'Custom staff':'موظف مخصص'}</option></select><label>{isEnglish?'Permissions':'الصلاحيات'}</label><div className="permission-list">{[['products','المنتجات'],['orders','الطلبات'],['customers','العملاء'],['marketing','التسويق'],['appointments','الحجوزات']].map(([key,label])=><label key={key}><input type="checkbox" checked={inviteForm.permissions.includes(key)} onChange={e=>setInviteForm(v=>({...v,permissions:e.target.checked?[...v.permissions,key]:v.permissions.filter(x=>x!==key)}))}/>{isEnglish?key:label}</label>)}</div><button className="primary" disabled={saving}>{saving?(isEnglish?'Sending...':'جاري الإرسال...'):(isEnglish?'Send invitation':'إرسال الدعوة')}</button></form>
+      {isStoreOwner&&<form className="module-form" onSubmit={inviteMember}><h4>{isEnglish?'Invite a teammate':'دعوة عضو للفريق'}</h4><label>{isEnglish?'Email address':'البريد الإلكتروني'}</label><input type="email" required value={inviteForm.email} onChange={e=>setInviteForm({...inviteForm,email:e.target.value})}/><label>{isEnglish?'Role':'الدور'}</label><select value={inviteForm.role} onChange={e=>setInviteForm({...inviteForm,role:e.target.value})}><option value="manager">{isEnglish?'Manager':'مدير'}</option><option value="catalog">{isEnglish?'Catalog':'إدارة المنتجات'}</option><option value="orders">{isEnglish?'Orders':'الطلبات'}</option><option value="support">{isEnglish?'Support':'دعم العملاء'}</option><option value="staff">{isEnglish?'Custom staff':'موظف مخصص'}</option></select><label>{isEnglish?'Permissions':'الصلاحيات'}</label><div className="permission-list">{[['products','المنتجات'],['orders','الطلبات'],['customers','العملاء'],['marketing','التسويق'],['appointments','الحجوزات']].map(([key,label])=><label key={key}><input type="checkbox" checked={inviteForm.permissions.includes(key)} onChange={e=>setInviteForm(v=>({...v,permissions:e.target.checked?[...v.permissions,key]:v.permissions.filter(x=>x!==key)}))}/>{isEnglish?key:label}</label>)}</div><button className="primary" disabled={saving}>{saving?(isEnglish?'Sending...':'جاري الإرسال...'):(isEnglish?'Send invitation':'إرسال الدعوة')}</button></form>}
       {team.length===0?<div className="module-empty">{isEnglish?'No team members yet.':'لا يوجد أعضاء فريق بعد.'}</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Email':'البريد'}</th><th>{isEnglish?'Role':'الدور'}</th><th>{isEnglish?'Status':'الحالة'}</th></tr></thead><tbody>{team.map(m=><tr key={m.id}><td>{m.member_email}</td><td>{m.role}</td><td>{m.invite_status}</td></tr>)}</tbody></table></div>}
       <p className="module-hint">{isEnglish?'Permissions are enforced by Supabase row-level security after the invite is accepted.':'الصلاحيات بيطبقها Supabase RLS على البيانات بعد قبول الدعوة.'}</p>
     </>}
