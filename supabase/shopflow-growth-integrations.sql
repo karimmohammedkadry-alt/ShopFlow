@@ -256,3 +256,16 @@ as $$
     'pages',coalesce((select jsonb_agg(to_jsonb(pages)) from pages),'[]'::jsonb))
   from totals;
 $$;
+
+
+-- Accepted teammates can load their workspace's non-secret store profile and analytics.
+drop policy if exists "ShopFlow workspace profile member read" on public.shopflow_profiles;
+create policy "ShopFlow workspace profile member read" on public.shopflow_profiles for select to authenticated
+using (auth.uid() = user_id or exists (
+  select 1 from public.shopflow_team_members m
+  where m.owner_id = shopflow_profiles.user_id and m.member_user_id = auth.uid() and m.invite_status='accepted'
+));
+drop policy if exists "ShopFlow analytics events owner read" on public.shopflow_analytics_events;
+drop policy if exists "ShopFlow analytics workspace read" on public.shopflow_analytics_events;
+create policy "ShopFlow analytics workspace read" on public.shopflow_analytics_events for select to authenticated
+using (user_id = public.shopflow_workspace_owner_id());
