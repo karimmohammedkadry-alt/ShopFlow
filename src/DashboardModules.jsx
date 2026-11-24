@@ -19,6 +19,8 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [coupons,setCoupons] = useState([]);
   const [campaigns,setCampaigns] = useState([]);
   const [team,setTeam] = useState([]);
+  const [integrations,setIntegrations] = useState([]);
+  const [providerForm,setProviderForm] = useState({paymob_reference:'',bosta_account:'',whatsapp_phone_id:'',whatsapp_business_id:''});
   const [trackingSite,setTrackingSite] = useState(null);
   const [analyticsSummary,setAnalyticsSummary] = useState(null);
   const [ga4Report,setGa4Report] = useState(null);
@@ -48,7 +50,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true); setError('');
-    const [p,c,o,a,g,pg,cp,cm,tm,ts,an] = await Promise.all([
+    const [p,c,o,a,g,pg,cp,cm,tm,ts,an,ig] = await Promise.all([
       supabase.from('shopflow_products').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_customers').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_orders').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
@@ -61,14 +63,14 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       supabase.from('shopflow_tracking_sites').select('*').eq('user_id',ownerId).maybeSingle(),
       supabase.rpc('shopflow_get_analytics_summary',{p_from:new Date(Date.now()-30*86400000).toISOString(),p_to:new Date().toISOString()})
     ]);
-    const failed = [p,c,o,a,g,pg,cp,cm,tm,ts,an].find(x=>x.error);
+    const failed = [p,c,o,a,g,pg,cp,cm,tm,ts,an,ig].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
     setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []); setAppointments(a.data || []);
     setGa4Id(g.data?.public_config?.measurement_id || '');
     setGa4PropertyId(g.data?.public_config?.property_id || '');
     setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
     setPages(pg.data||[]); setCoupons(cp.data||[]); setCampaigns(cm.data||[]); setTeam(tm.data||[]);
-    setTrackingSite(ts.data||null); setTrackingDomain(ts.data?.allowed_origins?.[0]||''); setAnalyticsSummary(an.data||null);
+    setTrackingSite(ts.data||null); setTrackingDomain(ts.data?.allowed_origins?.[0]||''); setAnalyticsSummary(an.data||null); setIntegrations(ig.data||[]);\n    const paymob=ig.data?.find(x=>x.provider==='paymob')?.public_config||{};const bosta=ig.data?.find(x=>x.provider==='bosta')?.public_config||{};const wa=ig.data?.find(x=>x.provider==='whatsapp_cloud')?.public_config||{};\n    setProviderForm({paymob_reference:paymob.merchant_reference||'',bosta_account:bosta.account_reference||'',whatsapp_phone_id:wa.phone_number_id||'',whatsapp_business_id:wa.business_account_id||''});
     setLoading(false);
   },[supabase,ownerId]);
 
@@ -125,6 +127,13 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     const {error:e1}=await supabase.from('shopflow_campaigns').insert({...campaignForm,user_id:ownerId});
     setSaving(false);if(e1){setError(e1.message);return;}
     setCampaignForm({name:'',channel:'email',message:''});await load();
+  }
+  async function saveProviderSetup(provider,displayName,publicConfig) {
+    setSaving(true);setError('');
+    const {error:e1}=await supabase.from('shopflow_integrations').upsert({
+      user_id:ownerId,provider,display_name:displayName,status:'pending',public_config:publicConfig
+    },{onConflict:'user_id,provider'});
+    setSaving(false);if(e1){setError(e1.message);return;}await load();
   }
   async function inviteMember(e) {
     e.preventDefault();setSaving(true);setError('');
@@ -330,7 +339,14 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       <h4>Google Analytics 4 · Data API</h4>
       <form className="module-form" onSubmit={saveAnalyticsId}><label>{isEnglish?'Measurement ID':'معرّف القياس'}</label><input value={ga4Id} onChange={e=>{setGa4Id(e.target.value);setGa4Saved(false)}} placeholder="G-XXXXXXXXXX"/><label>{isEnglish?'GA4 Property ID':'رقم خاصية GA4 (Property ID)'}</label><input value={ga4PropertyId} onChange={e=>setGa4PropertyId(e.target.value)} placeholder="123456789"/><button className="primary" disabled={saving}>{isEnglish?'Save GA4 settings':'حفظ إعدادات GA4'}</button><p className="module-hint">{isEnglish?'The GA4 Data API also needs a Google service account with Viewer access to this property. Add its credentials as Supabase Edge Function secrets; never paste private keys here.':'قراءة تقارير GA4 تحتاج Service Account من Google بصلاحية Viewer على الخاصية. بياناته السرية تتحط في Supabase Edge Function Secrets، وممنوع لصق المفتاح الخاص هنا.'}</p></form>
     </>}
-    {activeSection==='integrations'&&<div className="feature-grid">{[['الدفع الإلكتروني','بوابات الدفع تحتاج حساب تاجر ومفاتيح سرية محفوظة في الخادم.'],['الشحن والتوصيل','التوصيل يحتاج ربط شركة الشحن وحسابها التجاري.'],['واتساب','الربط الرسمي يحتاج إعداد WhatsApp Business Platform.'],['التحليلات','يمكن إضافة أدوات التحليلات بعد ضبط الموافقة والخصوصية.']].map(([name,desc])=><article key={name}><b>{name}</b><p>{desc}</p><span>غير متصل</span></article>)}</div>}
+    {activeSection==='integrations'&&<>
+      <div className="feature-grid">
+        <article><b>Paymob · {isEnglish?'Payments':'الدفع الإلكتروني'}</b><p>{isEnglish?'Hosted checkout for independently coded stores. The private API key and webhook HMAC must stay server-side.':'دفع مستضاف للمواقع المبرمجة. مفتاح API وHMAC السري لازم يفضلوا على الخادم فقط.'}</p><span>{integrations.find(x=>x.provider==='paymob')?.status||'not_connected'}</span><a href="https://developers.paymob.com/paymob-docs/getting-started/overview" target="_blank" rel="noreferrer">Paymob developer docs</a><label>{isEnglish?'Merchant reference':'مرجع حساب التاجر'}</label><input value={providerForm.paymob_reference} onChange={e=>setProviderForm({...providerForm,paymob_reference:e.target.value})}/><button className="outline small" onClick={()=>saveProviderSetup('paymob','Paymob',{merchant_reference:providerForm.paymob_reference})} disabled={saving}>{isEnglish?'Save setup':'حفظ الإعداد'}</button></article>
+        <article><b>Bosta · {isEnglish?'Shipping':'الشحن'}</b><p>{isEnglish?'Shipping labels and tracking for Egyptian stores. The API key must be stored in the server secret vault.':'إنشاء الشحنات وتتبعها. مفتاح Bosta السري لازم يتحفظ في الخادم.'}</p><span>{integrations.find(x=>x.provider==='bosta')?.status||'not_connected'}</span><a href="https://docs.bosta.co/" target="_blank" rel="noreferrer">Bosta API docs</a><label>{isEnglish?'Bosta account reference':'مرجع حساب Bosta'}</label><input value={providerForm.bosta_account} onChange={e=>setProviderForm({...providerForm,bosta_account:e.target.value})}/><button className="outline small" onClick={()=>saveProviderSetup('bosta','Bosta',{account_reference:providerForm.bosta_account})} disabled={saving}>{isEnglish?'Save setup':'حفظ الإعداد'}</button></article>
+        <article><b>WhatsApp Cloud API</b><p>{isEnglish?'Official business messaging. Phone Number ID and Business Account ID are identifiers; the access token is a private server secret.':'رسائل واتساب الرسمية. Phone Number ID وBusiness Account ID معرفات، أما Access Token فسري ولازم يتحفظ في الخادم.'}</p><span>{integrations.find(x=>x.provider==='whatsapp_cloud')?.status||'not_connected'}</span><a href="https://developers.facebook.com/docs/whatsapp/cloud-api/" target="_blank" rel="noreferrer">Meta WhatsApp docs</a><label>Phone Number ID</label><input value={providerForm.whatsapp_phone_id} onChange={e=>setProviderForm({...providerForm,whatsapp_phone_id:e.target.value})}/><label>WhatsApp Business Account ID</label><input value={providerForm.whatsapp_business_id} onChange={e=>setProviderForm({...providerForm,whatsapp_business_id:e.target.value})}/><button className="outline small" onClick={()=>saveProviderSetup('whatsapp_cloud','WhatsApp Cloud API',{phone_number_id:providerForm.whatsapp_phone_id,business_account_id:providerForm.whatsapp_business_id})} disabled={saving}>{isEnglish?'Save setup':'حفظ الإعداد'}</button></article>
+      </div>
+      <p className="module-hint">{isEnglish?'Saving these public identifiers only marks setup as pending. Actual payments, shipping requests and WhatsApp messages remain disabled until encrypted merchant secrets, provider adapters and verified webhooks are deployed. Never paste secret keys into this dashboard.':'حفظ المعرفات دي بيخلي الحالة قيد الإعداد فقط. الدفع والشحن وإرسال الرسائل مش هيتفعلوا قبل تجهيز مفاتيح سرية مشفرة على الخادم، وتنفيذ API adapters وwebhooks موثقة. ممنوع تحط مفاتيح سرية هنا.'}</p>
+    </>}
     {activeSection==='staff'&&<>
       {isStoreOwner&&<form className="module-form" onSubmit={inviteMember}><h4>{isEnglish?'Invite a teammate':'دعوة عضو للفريق'}</h4><label>{isEnglish?'Email address':'البريد الإلكتروني'}</label><input type="email" required value={inviteForm.email} onChange={e=>setInviteForm({...inviteForm,email:e.target.value})}/><label>{isEnglish?'Role':'الدور'}</label><select value={inviteForm.role} onChange={e=>setInviteForm({...inviteForm,role:e.target.value})}><option value="manager">{isEnglish?'Manager':'مدير'}</option><option value="catalog">{isEnglish?'Catalog':'إدارة المنتجات'}</option><option value="orders">{isEnglish?'Orders':'الطلبات'}</option><option value="support">{isEnglish?'Support':'دعم العملاء'}</option><option value="staff">{isEnglish?'Custom staff':'موظف مخصص'}</option></select><label>{isEnglish?'Permissions':'الصلاحيات'}</label><div className="permission-list">{[['products','المنتجات'],['orders','الطلبات'],['customers','العملاء'],['marketing','التسويق'],['appointments','الحجوزات']].map(([key,label])=><label key={key}><input type="checkbox" checked={inviteForm.permissions.includes(key)} onChange={e=>setInviteForm(v=>({...v,permissions:e.target.checked?[...v.permissions,key]:v.permissions.filter(x=>x!==key)}))}/>{isEnglish?key:label}</label>)}</div><button className="primary" disabled={saving}>{saving?(isEnglish?'Sending...':'جاري الإرسال...'):(isEnglish?'Send invitation':'إرسال الدعوة')}</button></form>}
       {team.length===0?<div className="module-empty">{isEnglish?'No team members yet.':'لا يوجد أعضاء فريق بعد.'}</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Email':'البريد'}</th><th>{isEnglish?'Role':'الدور'}</th><th>{isEnglish?'Status':'الحالة'}</th></tr></thead><tbody>{team.map(m=><tr key={m.id}><td>{m.member_email}</td><td>{m.role}</td><td>{m.invite_status}</td></tr>)}</tbody></table></div>}
