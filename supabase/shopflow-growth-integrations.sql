@@ -140,3 +140,39 @@ grant select,insert,update,delete on public.shopflow_coupons to authenticated;
 grant select,insert,update,delete on public.shopflow_campaigns to authenticated;
 grant select,insert,update,delete on public.shopflow_tracking_sites to authenticated;
 grant select on public.shopflow_analytics_events to authenticated;
+
+
+create or replace function public.shopflow_get_analytics_summary(p_from timestamptz, p_to timestamptz)
+returns jsonb language sql stable security invoker set search_path = public
+as $$
+  with filtered as (
+    select * from public.shopflow_analytics_events
+    where user_id = auth.uid() and created_at >= p_from and created_at < p_to
+  ),
+  totals as (
+    select
+      count(*) filter (where event_name='page_view') as page_views,
+      count(distinct visitor_id) as visitors,
+      count(distinct session_id) as sessions,
+      count(*) filter (where event_name='purchase') as purchases,
+      coalesce(sum(event_value) filter (where event_name='purchase'),0) as tracked_revenue
+    from filtered
+  ),
+  sources as (
+    select coalesce(nullif(utm_source,''),'direct') as source, count(distinct session_id) as sessions
+    from filtered group by 1 order by sessions desc limit 8
+  ),
+  pages as (
+    select page_path, count(*) as views
+    from filtered where event_name='page_view'
+    group by page_path order by views desc limit 8
+  )
+  select jsonb_build_object(
+    'page_views', totals.page_views, 'visitors', totals.visitors,
+    'sessions', totals.sessions, 'purchases', totals.purchases,
+    'tracked_revenue', totals.tracked_revenue,
+    'sources', coalesce((select jsonb_agg(to_jsonb(sources)) from sources),'[]'::jsonb),
+    'pages', coalesce((select jsonb_agg(to_jsonb(pages)) from pages),'[]'::jsonb)
+  ) from totals;
+$$;
+grant execute on function public.shopflow_get_analytics_summary(timestamptz,timestamptz) to authenticated;
