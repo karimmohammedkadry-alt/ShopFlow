@@ -13,6 +13,9 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [products,setProducts] = useState([]);
   const [customers,setCustomers] = useState([]);
   const [orders,setOrders] = useState([]);
+  const [appointments,setAppointments] = useState([]);
+  const [showAppointment,setShowAppointment] = useState(false);
+  const [appointmentForm,setAppointmentForm] = useState({customer_name:'',service_name:'',starts_at:'',notes:''});
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
@@ -27,12 +30,13 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true); setError('');
-    const [p,c,o] = await Promise.all([
+    const [p,c,o,a] = await Promise.all([
       supabase.from('shopflow_products').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
       supabase.from('shopflow_customers').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
-      supabase.from('shopflow_orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false})
+      supabase.from('shopflow_orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
+      supabase.from('shopflow_appointments').select('*').eq('user_id',user.id).order('starts_at',{ascending:true})
     ]);
-    const failed = [p,c,o].find(x=>x.error);
+    const failed = [p,c,o,a].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
     setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []);
     setLoading(false);
@@ -87,6 +91,21 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     if(e1){setError(e1.message);return;}
     setOrderForm({customer_id:'',total:'',currency:'EGP',notes:''});setShowOrder(false);await load();
   }
+  async function addAppointment(e) {
+    e.preventDefault(); setSaving(true); setError('');
+    const {error:e1}=await supabase.from('shopflow_appointments').insert({
+      user_id:user.id, customer_name:appointmentForm.customer_name.trim(),
+      service_name:appointmentForm.service_name.trim(),
+      starts_at:new Date(appointmentForm.starts_at).toISOString(), notes:appointmentForm.notes
+    });
+    setSaving(false);
+    if(e1){setError(e1.message);return;}
+    setAppointmentForm({customer_name:'',service_name:'',starts_at:'',notes:''});setShowAppointment(false);await load();
+  }
+  async function updateAppointmentStatus(item,status) {
+    const {error:e1}=await supabase.from('shopflow_appointments').update({status}).eq('id',item.id).eq('user_id',user.id);
+    if(e1)setError(e1.message);else await load();
+  }
   async function changeOrderStatus(order,status) {
     const {error:e1}=await supabase.from('shopflow_orders').update({status,updated_at:new Date().toISOString()}).eq('id',order.id).eq('user_id',user.id);
     if(e1)setError(e1.message);else await load();
@@ -102,7 +121,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     services:[['duration_minutes','مدة الخدمة بالدقائق'],['delivery_mode','طريقة تقديم الخدمة'],['staff_name','مقدم الخدمة']],
     general:[['sku','رمز المنتج SKU'],['supplier','المورد'],['unit','وحدة القياس']]
   };
-  const title = isEnglish ? ({overview:'Overview',catalog:'Products & menu',orders:'Orders',customers:'Customers',inventory:'Inventory',marketing:'Marketing & offers',reports:'Analytics & reports',website:'Website builder',integrations:'Integrations',staff:'Team & permissions',settings:'Store settings'}[activeSection] || 'Store dashboard') : (labels[activeSection] || 'لوحة المتجر');
+  const title = isEnglish ? ({overview:'Overview',catalog:'Products & menu',orders:'Orders',customers:'Customers',inventory:'Inventory',marketing:'Marketing & offers',reports:'Analytics & reports',website:'Website builder',integrations:'Integrations',staff:'Team & permissions',settings:'Store settings',appointments:'Appointments'}[activeSection] || 'Store dashboard') : (labels[activeSection] || 'لوحة المتجر');
   const isRestaurant = industry==='restaurant';
   const productLabel = isRestaurant?(isEnglish?'Menu item':'الصنف'):(isEnglish?'Product':'المنتج');
   const fieldList = industryFields[industry] || industryFields.general;
@@ -135,7 +154,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
         <div className="module-form-grid"><div><label>السعر *</label><input required type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})}/></div><div><label>الكمية المتاحة</label><input type="number" min="0" step="1" value={productForm.stock} onChange={e=>setProductForm({...productForm,stock:e.target.value})}/></div></div>
         <div className="module-actions"><button className="primary" disabled={saving}>{saving?'جاري الحفظ...':'حفظ '+productLabel}</button><button type="button" className="outline" onClick={()=>setShowProduct(false)}>إلغاء</button></div>
       </form>}
-      {products.length===0?<div className="module-empty">لا توجد {productLabel==='الصنف'?'أصناف':'منتجات'} حتى الآن. أضف أول عنصر لبدء إدارة الكتالوج.</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>الاسم</th><th>التصنيف</th><th>السعر</th><th>المخزون</th><th>إجراء</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td><b>{p.name}</b><small>{p.description}</small></td><td>{p.category||'—'}</td><td>{money(p.price)}</td><td><input aria-label={'كمية '+p.name} className="stock-input" type="number" min="0" defaultValue={p.stock} onBlur={e=>{if(Number(e.target.value)!==Number(p.stock))changeStock(p,e.target.value)}} /></td><td><button className="danger-link" onClick={()=>deleteProduct(p)}>حذف</button></td></tr>)}</tbody></table></div>}
+      {products.length===0?<div className="module-empty">لا توجد {productLabel==='الصنف'?'أصناف':'منتجات'} حتى الآن. أضف أول عنصر لبدء إدارة الكتالوج.</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>الاسم</th><th>التصنيف</th><th>السعر</th><th>المخزون</th><th>إجراء</th></tr></thead><tbody>{products.map(p=><tr key={p.id}><td><b>{p.name}</b><small>{[p.description,...Object.entries(p.options||{}).filter(([,v])=>String(v).trim()).map(([k,v])=>k+': '+v)].filter(Boolean).join(' · ')}</small></td><td>{p.category||'—'}</td><td>{money(p.price)}</td><td><input aria-label={'كمية '+p.name} className="stock-input" type="number" min="0" defaultValue={p.stock} onBlur={e=>{if(Number(e.target.value)!==Number(p.stock))changeStock(p,e.target.value)}} /></td><td><button className="danger-link" onClick={()=>deleteProduct(p)}>حذف</button></td></tr>)}</tbody></table></div>}
     </>}
     {activeSection==='customers' && <>
       <div className="module-actions"><button className="primary" onClick={()=>setShowCustomer(v=>!v)}>＋ إضافة عميل</button><span className="module-hint">إجمالي العملاء: {customers.length}</span></div>
@@ -146,6 +165,17 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       <div className="module-actions"><button className="primary" onClick={()=>setShowOrder(v=>!v)}>＋ تسجيل طلب</button><span className="module-hint">إجمالي الطلبات: {orders.length}</span></div>
       {showOrder&&<form className="module-form" onSubmit={addOrder}><label>العميل</label><select value={orderForm.customer_id} onChange={e=>setOrderForm({...orderForm,customer_id:e.target.value})}><option value="">طلب بدون عميل مسجل</option>{customers.map(c=><option key={c.id} value={c.id}>{c.full_name}</option>)}</select><div className="module-form-grid"><div><label>إجمالي الطلب *</label><input required type="number" min="0" step="0.01" value={orderForm.total} onChange={e=>setOrderForm({...orderForm,total:e.target.value})}/></div><div><label>العملة</label><select value={orderForm.currency} onChange={e=>setOrderForm({...orderForm,currency:e.target.value})}><option value="EGP">EGP - جنيه مصري</option><option value="USD">USD - دولار</option><option value="SAR">SAR - ريال سعودي</option><option value="AED">AED - درهم إماراتي</option><option value="EUR">EUR - يورو</option></select></div></div><label>ملاحظات الطلب</label><textarea rows="2" value={orderForm.notes} onChange={e=>setOrderForm({...orderForm,notes:e.target.value})}/><div className="module-actions"><button className="primary" disabled={saving}>{saving?'جاري الحفظ...':'حفظ الطلب'}</button><button type="button" className="outline" onClick={()=>setShowOrder(false)}>إلغاء</button></div></form>}
       {orders.length===0?<div className="module-empty">لا توجد طلبات حتى الآن. يمكنك تسجيل طلب يدوي للتجربة.</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th><th>تحديث الحالة</th></tr></thead><tbody>{orders.map(o=><tr key={o.id}><td>#{o.order_number}</td><td>{o.customer_snapshot?.full_name||'عميل غير محدد'}</td><td>{money(o.total,o.currency||'EGP')}</td><td><span className={'status-chip status-'+o.status}>{orderStates[o.status]||o.status}</span></td><td><select aria-label={'حالة الطلب '+o.order_number} value={o.status} onChange={e=>changeOrderStatus(o,e.target.value)}>{Object.entries(orderStates).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></td></tr>)}</tbody></table></div>}
+    </>}
+    {activeSection==='appointments' && industry==='services' && <>
+      <div className="module-actions"><button className="primary" onClick={()=>setShowAppointment(v=>!v)}>＋ {isEnglish?'Book appointment':'إضافة حجز'}</button><span className="module-hint">{isEnglish?'Bookings':'الحجوزات'}: {appointments.length}</span></div>
+      {showAppointment&&<form className="module-form" onSubmit={addAppointment}>
+        <label>{isEnglish?'Customer name':'اسم العميل'} *</label><input required value={appointmentForm.customer_name} onChange={e=>setAppointmentForm({...appointmentForm,customer_name:e.target.value})}/>
+        <label>{isEnglish?'Service':'الخدمة'} *</label><input required value={appointmentForm.service_name} onChange={e=>setAppointmentForm({...appointmentForm,service_name:e.target.value})}/>
+        <label>{isEnglish?'Date and time':'التاريخ والوقت'} *</label><input required type="datetime-local" value={appointmentForm.starts_at} onChange={e=>setAppointmentForm({...appointmentForm,starts_at:e.target.value})}/>
+        <label>{isEnglish?'Notes':'ملاحظات'}</label><textarea rows="2" value={appointmentForm.notes} onChange={e=>setAppointmentForm({...appointmentForm,notes:e.target.value})}/>
+        <div className="module-actions"><button className="primary" disabled={saving}>{saving?(isEnglish?'Saving...':'جاري الحفظ...'):(isEnglish?'Save booking':'حفظ الحجز')}</button><button type="button" className="outline" onClick={()=>setShowAppointment(false)}>{isEnglish?'Cancel':'إلغاء'}</button></div>
+      </form>}
+      {appointments.length===0?<div className="module-empty">{isEnglish?'No bookings yet. Add your first appointment.':'لا توجد حجوزات حتى الآن. أضف أول موعد.'}</div>:<div className="module-table-wrap"><table className="module-table"><thead><tr><th>{isEnglish?'Customer':'العميل'}</th><th>{isEnglish?'Service':'الخدمة'}</th><th>{isEnglish?'Date':'الموعد'}</th><th>{isEnglish?'Status':'الحالة'}</th></tr></thead><tbody>{appointments.map(a=><tr key={a.id}><td>{a.customer_name}</td><td>{a.service_name}</td><td>{new Date(a.starts_at).toLocaleString(isEnglish?'en-US':'ar-EG')}</td><td><select value={a.status} onChange={e=>updateAppointmentStatus(a,e.target.value)}><option value="booked">{isEnglish?'Booked':'محجوز'}</option><option value="confirmed">{isEnglish?'Confirmed':'مؤكد'}</option><option value="completed">{isEnglish?'Completed':'مكتمل'}</option><option value="cancelled">{isEnglish?'Cancelled':'ملغي'}</option></select></td></tr>)}</tbody></table></div>}
     </>}
     {activeSection==='marketing'&&<div className="feature-grid"><article><b>كوبونات الخصم</b><p>تصميم الكوبونات وتحديد صلاحيتها يحتاج جداول وآلية تحقق عند إتمام الطلب.</p><span>غير مفعّل بعد</span></article><article><b>الحملات التسويقية</b><p>ربط حملات البريد وواتساب يحتاج مزود إرسال وموافقة المستخدم.</p><span>غير مفعّل بعد</span></article><article><b>العروض</b><p>يمكن بناء عروض مرتبطة بالمنتجات بعد إضافة محرك تسعير للمتجر.</p><span>قيد التجهيز</span></article></div>}
     {activeSection==='reports'&&<><div className="stats-grid module-stats"><article className="stat card"><span>إجمالي الطلبات</span><strong>{stats.orders}</strong></article><article className="stat card"><span>قيمة الطلبات المكتملة</span><strong>{money(stats.revenue)}</strong></article><article className="stat card"><span>متوسط قيمة الطلب المكتمل</span><strong>{money(stats.orders?stats.revenue/(orders.filter(o=>o.status==='completed').length||1):0)}</strong></article></div><p className="module-hint">التقرير الحالي مبني على سجلات الطلبات الفعلية. تقارير الأرباح الصافية والضرائب والتكاليف تحتاج تسجيل المصروفات وتكلفة البضاعة.</p></>}
