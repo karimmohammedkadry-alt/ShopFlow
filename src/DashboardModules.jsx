@@ -61,7 +61,8 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
       supabase.from('shopflow_campaigns').select('*').eq('user_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_team_members').select('*').eq('owner_id',ownerId).order('created_at',{ascending:false}),
       supabase.from('shopflow_tracking_sites').select('*').eq('user_id',ownerId).maybeSingle(),
-      supabase.rpc('shopflow_get_analytics_summary',{p_from:new Date(Date.now()-30*86400000).toISOString(),p_to:new Date().toISOString()})
+      supabase.rpc('shopflow_get_analytics_summary',{p_from:new Date(Date.now()-30*86400000).toISOString(),p_to:new Date().toISOString()}),
+      supabase.from('shopflow_integrations').select('*').eq('user_id',ownerId).order('provider')
     ]);
     const failed = [p,c,o,a,g,pg,cp,cm,tm,ts,an,ig].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
@@ -70,7 +71,9 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     setGa4PropertyId(g.data?.public_config?.property_id || '');
     setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
     setPages(pg.data||[]); setCoupons(cp.data||[]); setCampaigns(cm.data||[]); setTeam(tm.data||[]);
-    setTrackingSite(ts.data||null); setTrackingDomain(ts.data?.allowed_origins?.[0]||''); setAnalyticsSummary(an.data||null); setIntegrations(ig.data||[]);\n    const paymob=ig.data?.find(x=>x.provider==='paymob')?.public_config||{};const bosta=ig.data?.find(x=>x.provider==='bosta')?.public_config||{};const wa=ig.data?.find(x=>x.provider==='whatsapp_cloud')?.public_config||{};\n    setProviderForm({paymob_reference:paymob.merchant_reference||'',bosta_account:bosta.account_reference||'',whatsapp_phone_id:wa.phone_number_id||'',whatsapp_business_id:wa.business_account_id||''});
+    setTrackingSite(ts.data||null); setTrackingDomain(ts.data?.allowed_origins?.[0]||''); setAnalyticsSummary(an.data||null); setIntegrations(ig.data||[]);
+    const paymob=ig.data?.find(x=>x.provider==='paymob')?.public_config||{};const bosta=ig.data?.find(x=>x.provider==='bosta')?.public_config||{};const wa=ig.data?.find(x=>x.provider==='whatsapp_cloud')?.public_config||{};
+    setProviderForm({paymob_reference:paymob.merchant_reference||'',bosta_account:bosta.account_reference||'',whatsapp_phone_id:wa.phone_number_id||'',whatsapp_business_id:wa.business_account_id||''});
     setLoading(false);
   },[supabase,ownerId]);
 
