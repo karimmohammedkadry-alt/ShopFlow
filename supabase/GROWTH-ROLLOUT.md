@@ -15,7 +15,7 @@ This creates coupon/campaign tables, team permission fields and policies, publis
 From the repository root, with the Supabase CLI installed and the project linked:
 
 ```bash
-supabase functions deploy shopflow-track
+supabase functions deploy shopflow-track --no-verify-jwt
 supabase functions deploy invite-team-member
 supabase functions deploy accept-team-invite
 supabase functions deploy ga4-report
