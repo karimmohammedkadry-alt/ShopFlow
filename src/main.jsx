@@ -13,6 +13,33 @@ function Brand() {
   return <div className="brand"><img src="/codex-logo.svg" alt="CODEX" /><span className="brand-name">ShopFlow</span><span className="brand-powered">Powered by <strong>CODEX</strong></span></div>;
 }
 
+function PublicStorePage() {
+  const parts=window.location.pathname.split('/').filter(Boolean);
+  const ownerId=parts[1], slug=parts[2];
+  const [page,setPage]=useState(null),[products,setProducts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  useEffect(()=>{
+    let live=true;
+    async function load(){
+      if(!supabase){setError('Storefront is not configured.');setLoading(false);return;}
+      const {data:pageData,error:pageError}=await supabase.from('shopflow_pages').select('*').eq('user_id',ownerId).eq('slug',slug).eq('is_published',true).maybeSingle();
+      if(pageError||!pageData){if(live){setError('الصفحة غير موجودة أو لم يتم نشرها بعد.');setLoading(false);}return;}
+      const {data:productData}=await supabase.from('shopflow_products').select('id,name,description,price,image_url,category').eq('user_id',ownerId).eq('is_active',true).order('created_at',{ascending:false});
+      if(live){setPage(pageData);setProducts(productData||[]);setLoading(false);}
+    }
+    load();return()=>{live=false};
+  },[ownerId,slug]);
+  if(loading)return <main className="public-store"><div className="loader"/><p>جاري تحميل المتجر...</p></main>;
+  if(error)return <main className="public-store"><h1>ShopFlow</h1><p>{error}</p></main>;
+  const content=page?.content||{};
+  return <main className={'public-store public-template-'+(page.template||'classic')} dir="rtl">
+    <header className="public-store-header"><span>SHOPFLOW</span><a href="#products">المنتجات</a></header>
+    <section className="public-hero"><small>{page.title}</small><h1>{content.hero_title||page.title}</h1><p>{content.description||'اكتشف مجموعتنا المختارة وتسوق بسهولة.'}</p><a href="#products">{content.button_label||'تسوق الآن'} ↓</a></section>
+    <section id="products" className="public-products"><div><small>OUR COLLECTION</small><h2>{page.template==='restaurant'?'قائمة الطعام':page.template==='services'?'خدماتنا':'منتجاتنا'}</h2></div>
+      {products.length===0?<p className="module-empty">سيتم عرض المنتجات هنا عند إضافتها إلى كتالوج المتجر.</p>:<div className="public-product-grid">{products.map(p=><article key={p.id}>{p.image_url&&<img src={p.image_url} alt={p.name}/>}<small>{p.category}</small><h3>{p.name}</h3><p>{p.description}</p><strong>{new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP'}).format(Number(p.price||0))}</strong></article>)}</div>}
+    </section><footer className="public-store-footer">Powered by ShopFlow</footer>
+  </main>;
+}
+
 function App() {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
@@ -156,6 +183,8 @@ function App() {
   }
 
   async function logout() { await supabase.auth.signOut(); setTrial(null); setProfile(null); }
+
+  if (window.location.pathname.startsWith('/store/')) return <PublicStorePage/>;
 
   if (loading) return <main className="center"><div className="loader" /><p>جاري التحميل...</p></main>;
   if (!supabase) return <main className="center"><section className="setup card"><Brand /><h1>خطوة واحدة قبل التشغيل</h1><p>أضف متغيري Supabase في إعدادات المشروع على Vercel لربط تسجيل الدخول وقاعدة البيانات.</p><code>VITE_SUPABASE_URL</code><code>VITE_SUPABASE_ANON_KEY</code><p className="muted">ستجد خطوات الإعداد في ملف README داخل المستودع.</p></section></main>;
