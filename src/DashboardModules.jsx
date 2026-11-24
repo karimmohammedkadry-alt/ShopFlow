@@ -15,6 +15,8 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [orders,setOrders] = useState([]);
   const [appointments,setAppointments] = useState([]);
   const [showAppointment,setShowAppointment] = useState(false);
+  const [ga4Id,setGa4Id] = useState('');
+  const [ga4Saved,setGa4Saved] = useState(false);
   const [appointmentForm,setAppointmentForm] = useState({customer_name:'',service_name:'',starts_at:'',notes:''});
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
@@ -51,6 +53,18 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     return { products:products.length, customers:customers.length, orders:orders.length, revenue, lowStock };
   },[products,customers,orders]);
 
+  async function saveAnalyticsId(e) {
+    e.preventDefault(); setSaving(true); setError('');
+    const cleanId=ga4Id.trim().toUpperCase();
+    if(!/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}
+    const {error:e1}=await supabase.from('shopflow_integrations').upsert({
+      user_id:user.id,provider:'google_analytics_4',display_name:'Google Analytics 4',
+      status:'pending',public_config:{measurement_id:cleanId}
+    },{onConflict:'user_id,provider'});
+    setSaving(false);
+    if(e1){setError(e1.message);return;}
+    setGa4Id(cleanId);setGa4Saved(true);
+  }
   async function addProduct(e) {
     e.preventDefault(); setSaving(true); setError('');
     const {error:e1}=await supabase.from('shopflow_products').insert({
@@ -180,6 +194,18 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     {activeSection==='marketing'&&<div className="feature-grid"><article><b>كوبونات الخصم</b><p>تصميم الكوبونات وتحديد صلاحيتها يحتاج جداول وآلية تحقق عند إتمام الطلب.</p><span>غير مفعّل بعد</span></article><article><b>الحملات التسويقية</b><p>ربط حملات البريد وواتساب يحتاج مزود إرسال وموافقة المستخدم.</p><span>غير مفعّل بعد</span></article><article><b>العروض</b><p>يمكن بناء عروض مرتبطة بالمنتجات بعد إضافة محرك تسعير للمتجر.</p><span>قيد التجهيز</span></article></div>}
     {activeSection==='reports'&&<><div className="stats-grid module-stats"><article className="stat card"><span>إجمالي الطلبات</span><strong>{stats.orders}</strong></article><article className="stat card"><span>قيمة الطلبات المكتملة</span><strong>{money(stats.revenue)}</strong></article><article className="stat card"><span>متوسط قيمة الطلب المكتمل</span><strong>{money(stats.orders?stats.revenue/(orders.filter(o=>o.status==='completed').length||1):0)}</strong></article></div><p className="module-hint">التقرير الحالي مبني على سجلات الطلبات الفعلية. تقارير الأرباح الصافية والضرائب والتكاليف تحتاج تسجيل المصروفات وتكلفة البضاعة.</p></>}
     {activeSection==='website'&&<div className="feature-grid"><article><b>صفحات المتجر</b><p>قاعدة البيانات مجهزة لحفظ الصفحات والقوالب، لكن محرر السحب والإفلات والنشر العام لم يُنفذا بعد.</p><span>قاعدة البيانات جاهزة</span></article><article><b>القوالب</b><p>سنضيف قوالب متخصصة لكل نشاط مع معاينة قبل النشر.</p><span>قيد التطوير</span></article><article><b>الدومين وSEO</b><p>ربط الدومين وإعدادات محركات البحث يحتاج إعداد DNS ونشر الصفحات.</p><span>يحتاج إعداد خارجي</span></article></div>}
+    {activeSection==='website'&&<>
+      <div className="feature-grid">
+        <article><b>{isEnglish?'Store URL':'رابط المتجر'}</b><p>{profile?.store_url|| (isEnglish?'No website URL added yet.':'لم تتم إضافة رابط موقع بعد.')}</p><span>{isEnglish?'Saved in store profile':'محفوظ في بيانات المتجر'}</span></article>
+        <article><b>Google Analytics 4</b><p>{isEnglish?'A website URL alone cannot reveal visitor counts. Add a GA4 Measurement ID, install its tracking tag on the public website, then authorize the Analytics Data API to import real reports.':'إدخال رابط الموقع وحده لا يكشف عدد الزوار. نحتاج Measurement ID من GA4 وتركيب كود التتبع على الموقع، وبعدها صلاحية قراءة التقارير عبر Analytics Data API.'}</p><span>{isEnglish?'External setup required':'يحتاج إعداد خارجي'}</span></article>
+      </div>
+      <form className="module-form" onSubmit={saveAnalyticsId}>
+        <label>Google Analytics 4 · Measurement ID</label>
+        <input value={ga4Id} onChange={e=>{setGa4Id(e.target.value);setGa4Saved(false)}} placeholder="G-XXXXXXXXXX" />
+        <button className="primary" disabled={saving}>{saving?(isEnglish?'Saving...':'جاري الحفظ...'):(isEnglish?'Save Measurement ID':'حفظ معرّف القياس')}</button>
+        {ga4Saved&&<p className="module-hint">{isEnglish?'ID saved. Tracking is not active until the GA4 tag is installed on the website and reporting access is connected.':'تم حفظ المعرّف. التتبع لم يبدأ بعد؛ لازم نركّب كود GA4 على الموقع ونربط صلاحية قراءة التقارير.'}</p>}
+      </form>
+    </>}
     {activeSection==='integrations'&&<div className="feature-grid">{[['الدفع الإلكتروني','بوابات الدفع تحتاج حساب تاجر ومفاتيح سرية محفوظة في الخادم.'],['الشحن والتوصيل','التوصيل يحتاج ربط شركة الشحن وحسابها التجاري.'],['واتساب','الربط الرسمي يحتاج إعداد WhatsApp Business Platform.'],['التحليلات','يمكن إضافة أدوات التحليلات بعد ضبط الموافقة والخصوصية.']].map(([name,desc])=><article key={name}><b>{name}</b><p>{desc}</p><span>غير متصل</span></article>)}</div>}
     {activeSection==='staff'&&<div className="module-empty">جدول أعضاء الفريق موجود، لكن دعوات البريد وتطبيق الصلاحيات على كل إجراء لم تُفعّل بعد. لن نعرض دعوات وهمية أو نمنح وصولًا غير محمي.</div>}
     {activeSection==='settings'&&<div className="settings-summary"><p><b>اسم المتجر:</b> {profile?.store_name}</p><p><b>نوع النشاط:</b> {profile?.business_type}</p><p><b>رابط المتجر:</b> {profile?.store_url||'غير محدد'}</p><button className="primary" onClick={()=>setEditingProfile(true)}>تعديل بيانات المتجر</button></div>}
