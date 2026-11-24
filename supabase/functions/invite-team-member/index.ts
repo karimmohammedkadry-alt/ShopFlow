@@ -20,7 +20,7 @@ Deno.serve(async(req)=>{
     const role=roles.includes(body.role)?body.role:"staff";
     const allowed=["products","orders","customers","marketing","appointments"];
     const permissions=role==="manager"?allowed: Array.isArray(body.permissions)?body.permissions.filter((p:string)=>allowed.includes(p)):[];
-    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))return Response.json({error:"Enter a valid email address."},{status:400,headers:cors});
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return Response.json({error:"Enter a valid email address."},{status:400,headers:cors});
     if(email===user.email?.toLowerCase())return Response.json({error:"You cannot invite your own email."},{status:400,headers:cors});
     const siteUrl=Deno.env.get("SHOPFLOW_SITE_URL")||"https://shopflow-codex-7d26.vercel.app";
     const {data:inviteData,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo:siteUrl});
