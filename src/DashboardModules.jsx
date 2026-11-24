@@ -14,6 +14,18 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [customers,setCustomers] = useState([]);
   const [orders,setOrders] = useState([]);
   const [appointments,setAppointments] = useState([]);
+  const [pages,setPages] = useState([]);
+  const [coupons,setCoupons] = useState([]);
+  const [campaigns,setCampaigns] = useState([]);
+  const [team,setTeam] = useState([]);
+  const [trackingSite,setTrackingSite] = useState(null);
+  const [analyticsSummary,setAnalyticsSummary] = useState(null);
+  const [trackingDomain,setTrackingDomain] = useState('');
+  const [showPageForm,setShowPageForm] = useState(false);
+  const [pageForm,setPageForm] = useState({id:null,title:'',slug:'',template:'classic',hero_title:'',description:'',button_label:'تسوق الآن'});
+  const [couponForm,setCouponForm] = useState({code:'',discount_type:'percent',discount_value:'10',min_order:'0',expires_at:''});
+  const [campaignForm,setCampaignForm] = useState({name:'',channel:'email',message:''});
+  const [inviteForm,setInviteForm] = useState({email:'',role:'staff',permissions:['products','orders']});
   const [showAppointment,setShowAppointment] = useState(false);
   const [ga4Id,setGa4Id] = useState('');
   const [ga4Saved,setGa4Saved] = useState(false);
@@ -32,7 +44,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true); setError('');
-    const [p,c,o,a,g] = await Promise.all([
+    const [p,c,o,a,g,pg,cp,cm,tm,ts,an] = await Promise.all([
       supabase.from('shopflow_products').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
       supabase.from('shopflow_customers').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
       supabase.from('shopflow_orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}),
@@ -55,6 +67,69 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     return { products:products.length, customers:customers.length, orders:orders.length, revenue, lowStock };
   },[products,customers,orders]);
 
+  async function savePage(e) {
+    e.preventDefault(); setSaving(true); setError('');
+    const slug=pageForm.slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'');
+    if(!slug){setError(isEnglish?'Use an English URL slug (a-z, 0-9, hyphens).':'اكتب رابط الصفحة بحروف إنجليزية وأرقام وشرطة فقط.');setSaving(false);return;}
+    const payload={user_id:user.id,title:pageForm.title.trim(),slug,template:pageForm.template,
+      content:{hero_title:pageForm.hero_title,description:pageForm.description,button_label:pageForm.button_label}};
+    const result=pageForm.id
+      ? await supabase.from('shopflow_pages').update({...payload,updated_at:new Date().toISOString()}).eq('id',pageForm.id).eq('user_id',user.id)
+      : await supabase.from('shopflow_pages').insert(payload);
+    setSaving(false);if(result.error){setError(result.error.message);return;}
+    setShowPageForm(false);setPageForm({id:null,title:'',slug:'',template:'classic',hero_title:'',description:'',button_label:'تسوق الآن'});await load();
+  }
+  function editPage(page) {
+    setPageForm({id:page.id,title:page.title,slug:page.slug,template:page.template||'classic',
+      hero_title:page.content?.hero_title||'',description:page.content?.description||'',button_label:page.content?.button_label||'تسوق الآن'});
+    setShowPageForm(true);
+  }
+  async function togglePage(page) {
+    const {error:e1}=await supabase.from('shopflow_pages').update({is_published:!page.is_published,updated_at:new Date().toISOString()}).eq('id',page.id).eq('user_id',user.id);
+    if(e1)setError(e1.message);else await load();
+  }
+  async function deletePage(page) {
+    if(!window.confirm((isEnglish?'Delete page ':'حذف الصفحة ')+page.title+'?'))return;
+    const {error:e1}=await supabase.from('shopflow_pages').delete().eq('id',page.id).eq('user_id',user.id);
+    if(e1)setError(e1.message);else await load();
+  }
+  async function addCoupon(e) {
+    e.preventDefault();setSaving(true);setError('');
+    const payload={user_id:user.id,code:couponForm.code.trim().toUpperCase(),discount_type:couponForm.discount_type,
+      discount_value:Number(couponForm.discount_value),min_order:Number(couponForm.min_order||0),
+      expires_at:couponForm.expires_at?new Date(couponForm.expires_at).toISOString():null};
+    const {error:e1}=await supabase.from('shopflow_coupons').insert(payload);
+    setSaving(false);if(e1){setError(e1.message);return;}
+    setCouponForm({code:'',discount_type:'percent',discount_value:'10',min_order:'0',expires_at:''});await load();
+  }
+  async function toggleCoupon(coupon) {
+    const {error:e1}=await supabase.from('shopflow_coupons').update({is_active:!coupon.is_active}).eq('id',coupon.id).eq('user_id',user.id);
+    if(e1)setError(e1.message);else await load();
+  }
+  async function addCampaign(e) {
+    e.preventDefault();setSaving(true);setError('');
+    const {error:e1}=await supabase.from('shopflow_campaigns').insert({...campaignForm,user_id:user.id});
+    setSaving(false);if(e1){setError(e1.message);return;}
+    setCampaignForm({name:'',channel:'email',message:''});await load();
+  }
+  async function inviteMember(e) {
+    e.preventDefault();setSaving(true);setError('');
+    const {data,error:e1}=await supabase.functions.invoke('invite-team-member',{body:inviteForm});
+    setSaving(false);if(e1){setError(e1.message||'تعذر إرسال الدعوة');return;}
+    setMessage(isEnglish?'Invitation sent. The member must accept the email invite before access is enabled.':'تم إرسال الدعوة. صلاحيات العضو هتتفعل بعد قبول دعوة البريد.');
+    setInviteForm({email:'',role:'staff',permissions:['products','orders']});await load();
+  }
+  async function saveTrackingSite(e) {
+    e.preventDefault();setSaving(true);setError('');
+    let origin='';
+    try{origin=new URL(trackingDomain.includes('://')?trackingDomain:'https://'+trackingDomain).origin;}catch{setError(isEnglish?'Enter a valid website domain.':'اكتب دومين صحيح.');setSaving(false);return;}
+    const payload={user_id:user.id,allowed_origins:[origin],is_active:true};
+    const result=trackingSite
+      ? await supabase.from('shopflow_tracking_sites').update({...payload,updated_at:new Date().toISOString()}).eq('user_id',user.id).select().single()
+      : await supabase.from('shopflow_tracking_sites').insert(payload).select().single();
+    setSaving(false);if(result.error){setError(result.error.message);return;}
+    setTrackingSite(result.data);setTrackingDomain(origin);
+  }
   async function saveAnalyticsId(e) {
     e.preventDefault(); setSaving(true); setError('');
     const cleanId=ga4Id.trim().toUpperCase();
