@@ -28,6 +28,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   const [inviteForm,setInviteForm] = useState({email:'',role:'staff',permissions:['products','orders']});
   const [showAppointment,setShowAppointment] = useState(false);
   const [ga4Id,setGa4Id] = useState('');
+  const [ga4PropertyId,setGa4PropertyId] = useState('');
   const [ga4Saved,setGa4Saved] = useState(false);
   const [appointmentForm,setAppointmentForm] = useState({customer_name:'',service_name:'',starts_at:'',notes:''});
   const [loading,setLoading] = useState(true);
@@ -54,7 +55,7 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
     const failed = [p,c,o,a,g].find(x=>x.error);
     if (failed) setError(failed.error.message || 'تعذر تحميل بيانات المتجر');
     setProducts(p.data || []); setCustomers(c.data || []); setOrders(o.data || []); setAppointments(a.data || []);
-    setGa4Id(g.data?.public_config?.measurement_id || ''); setGa4Saved(Boolean(g.data?.public_config?.measurement_id));
+    setGa4Id(g.data?.public_config?.measurement_id || ''); setGa4PropertyId(g.data?.public_config?.property_id || ''); setGa4Saved(Boolean(g.data?.public_config?.measurement_id || g.data?.public_config?.property_id));
     setLoading(false);
   },[supabase,user?.id]);
 
@@ -133,10 +134,10 @@ export default function DashboardModules({ supabase, user, profile, activeSectio
   async function saveAnalyticsId(e) {
     e.preventDefault(); setSaving(true); setError('');
     const cleanId=ga4Id.trim().toUpperCase();
-    if(!/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}
+    if(cleanId && !/^G-[A-Z0-9]+$/.test(cleanId)){setError(isEnglish?'Enter a valid GA4 Measurement ID (G-XXXXXXXXXX).':'اكتب Measurement ID صحيح يبدأ بـ G-');setSaving(false);return;}\n    if(ga4PropertyId.trim() && !/^\\d+$/.test(ga4PropertyId.trim())){setError(isEnglish?'Property ID must contain digits only.':'رقم الخاصية لازم يكون أرقام فقط.');setSaving(false);return;}\n    if(!cleanId && !ga4PropertyId.trim()){setError(isEnglish?'Enter a Measurement ID or Property ID.':'اكتب معرّف القياس أو رقم الخاصية.');setSaving(false);return;}
     const {error:e1}=await supabase.from('shopflow_integrations').upsert({
       user_id:user.id,provider:'google_analytics_4',display_name:'Google Analytics 4',
-      status:'pending',public_config:{measurement_id:cleanId}
+      status:'pending',public_config:{measurement_id:cleanId,property_id:ga4PropertyId.trim()}
     },{onConflict:'user_id,provider'});
     setSaving(false);
     if(e1){setError(e1.message);return;}
