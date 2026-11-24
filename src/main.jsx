@@ -34,6 +34,10 @@ function App() {
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('shopflow-theme') || 'light');
+  const [language, setLanguage] = useState(() => localStorage.getItem('shopflow-language') || 'ar');
+  useEffect(() => { localStorage.setItem('shopflow-theme', theme); }, [theme]);
+  useEffect(() => { localStorage.setItem('shopflow-language', language); document.documentElement.lang = language; document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'; }, [language]);
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -191,13 +195,36 @@ function App() {
   const mm = String(Math.floor((remaining % 3600000) / 60000)).padStart(2,'0');
   const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
 
-  return <main className="dashboard">
-    <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span><button className="outline small" onClick={()=>setEditingProfile(true)}>إعدادات المتجر</button><button className="outline small" onClick={logout}>تسجيل الخروج</button></div></header>
-    <section className="welcome"><div><div className="eyebrow">لوحة التحكم · {({restaurant:'مطعم وكافيه',fashion:'ملابس وأزياء',electronics:'إلكترونيات',beauty:'تجميل وعناية',services:'خدمات وحجوزات',general:'متجر عام'})[profile?.business_type || 'general']}</div><h1>أهلاً بك في {profile?.store_name || "متجرك"}</h1><p className="muted">ابدأ رحلتك في إدارة متجرك الإلكتروني.</p></div><span className="avatar">{session.user.email?.[0]?.toUpperCase()}</span></section>
+  const isArabic = language === 'ar';
+  const navItems = [
+    {id:'overview',ar:'الرئيسية',en:'Overview',icon:'⌂'},
+    {id:'catalog',ar:profile?.business_type==='restaurant'?'المنيو':'المنتجات',en:profile?.business_type==='restaurant'?'Menu':'Products',icon:'▦'},
+    {id:'orders',ar:'الطلبات',en:'Orders',icon:'▤'},{id:'customers',ar:'العملاء',en:'Customers',icon:'♙'},
+    {id:'inventory',ar:'المخزون',en:'Inventory',icon:'▥'},{id:'marketing',ar:'التسويق',en:'Marketing',icon:'✦'},
+    {id:'reports',ar:'التقارير',en:'Analytics',icon:'▧'},{id:'website',ar:'الموقع والقوالب',en:'Website builder',icon:'◫'},
+    {id:'integrations',ar:'التكاملات',en:'Integrations',icon:'⌘'},{id:'staff',ar:'الموظفون',en:'Team & roles',icon:'♧'},
+    {id:'settings',ar:'الإعدادات',en:'Settings',icon:'⚙'}
+  ];
+  return <main className={'dashboard '+(theme==='dark'?'theme-dark':'')} dir={isArabic?'rtl':'ltr'}>
+    <div className="dashboard-layout">
+      <aside className="dashboard-sidebar">
+        <div className="sidebar-brand"><Brand/></div>
+        <div className="sidebar-store"><strong>{profile?.store_name || 'ShopFlow'}</strong><small>{isArabic?'مساحة المتجر':'Store workspace'}</small></div>
+        <nav className="sidebar-nav">{navItems.map(item=><button key={item.id} className={activeSection===item.id?'selected':''} onClick={()=>setActiveSection(item.id)}><span>{item.icon}</span>{isArabic?item.ar:item.en}</button>)}</nav>
+        <div className="sidebar-controls">
+          <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?(isArabic?'☀ الوضع الفاتح':'☀ Light mode'):(isArabic?'☾ الوضع الداكن':'☾ Dark mode')}</button>
+          <button onClick={()=>setLanguage(isArabic?'en':'ar')}>{isArabic?'English':'العربية'}</button>
+        </div>
+      </aside>
+      <div className="dashboard-main">
+    <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span><button className="outline small" onClick={()=>setEditingProfile(true)}>{isArabic?"إعدادات المتجر":"Store settings"}</button><button className="outline small" onClick={logout}>{isArabic?"تسجيل الخروج":"Sign out"}</button></div></header>
+    <section className="welcome"><div><div className="eyebrow">{isArabic?"لوحة التحكم":"Dashboard"} · {({restaurant:'مطعم وكافيه',fashion:'ملابس وأزياء',electronics:'إلكترونيات',beauty:'تجميل وعناية',services:'خدمات وحجوزات',general:'متجر عام'})[profile?.business_type || 'general']}</div><h1>{isArabic?("أهلاً بك في "+(profile?.store_name||"متجرك")):("Welcome to "+(profile?.store_name||"your store"))}</h1><p className="muted">{isArabic?"ابدأ رحلتك في إدارة متجرك الإلكتروني.":"Manage your business from one workspace."}</p></div><span className="avatar">{session.user.email?.[0]?.toUpperCase()}</span></section>
     {expired ? <section className="expired card"><div className="status-icon">⌛</div><h2>انتهت فترة التجربة</h2><p>انتهت فترة التجربة المجانية لمدة 48 ساعة لهذا الحساب.</p><a className="primary link-button" href="mailto:hello@shopflow.example?subject=طلب%20تفعيل%20ShopFlow">تواصل معنا لطلب الخدمة</a></section>
     : !trial?.started_at ? <section className="trial-card card"><span className="pill">تجربة مجانية</span><h2>جرّب ShopFlow لمدة 48 ساعة</h2><p>استكشف لوحة التحكم وابدأ تجربة إدارة متجرك. يبدأ العدّ التنازلي فقط عند الضغط على الزر، والتجربة متاحة مرة واحدة لكل حساب.</p><button className="primary start" onClick={startTrial} disabled={busy}>{busy?'جاري بدء التجربة...':'ابدأ تجربتي المجانية'} <span>←</span></button><div className="fine-print">48 ساعة من لحظة البدء · لا يمكن إعادة ضبط التجربة</div></section>
-    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك</h2><p className="muted">متبقي من وقت التجربة: <strong>{hh}:{mm}:{ss}</strong></p></div><div className="clock clock-live" dir="ltr"><strong>{hh}:{mm}:{ss}</strong><small>متبقي</small></div></section><nav className="module-nav">{([{id:'overview',label:'الرئيسية',icon:'⌂'},{id:'catalog',label:profile?.business_type==='restaurant'?'المنيو':'المنتجات',icon:'▦'},{id:'orders',label:'الطلبات',icon:'▤'},{id:'customers',label:'العملاء',icon:'♙'},{id:'inventory',label:'المخزون',icon:'▥'},{id:'marketing',label:'التسويق',icon:'✦'},{id:'reports',label:'التقارير',icon:'▧'},{id:'website',label:'الموقع والقوالب',icon:'◫'},{id:'integrations',label:'التكاملات',icon:'⌘'},{id:'staff',label:'الموظفون',icon:'♧'},{id:'settings',label:'الإعدادات',icon:'⚙'}]).map(item=><button key={item.id} className={activeSection===item.id?'selected':''} onClick={()=>setActiveSection(item.id)}>{item.icon} {item.label}</button>)}</nav><DashboardModules supabase={supabase} user={session.user} profile={profile} activeSection={activeSection} setActiveSection={setActiveSection} setMessage={setMessage} setEditingProfile={setEditingProfile}/></>}
+    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك</h2><p className="muted">متبقي من وقت التجربة: <strong>{hh}:{mm}:{ss}</strong></p></div><div className="clock clock-live" dir="ltr"><strong>{hh}:{mm}:{ss}</strong><small>متبقي</small></div></section><DashboardModules supabase={supabase} user={session.user} profile={profile} activeSection={activeSection} setActiveSection={setActiveSection} setMessage={setMessage} setEditingProfile={setEditingProfile} language={language}/></>}
     {message && <p className="notice">{message}</p>}
+      </div>
+    </div>
   </main>;
 }
 
