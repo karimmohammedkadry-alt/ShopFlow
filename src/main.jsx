@@ -199,7 +199,7 @@ function App() {
   const navItems = [
     {id:'overview',ar:'الرئيسية',en:'Overview',icon:'⌂'},
     {id:'catalog',ar:profile?.business_type==='restaurant'?'المنيو':'المنتجات',en:profile?.business_type==='restaurant'?'Menu':'Products',icon:'▦'},
-    {id:'orders',ar:'الطلبات',en:'Orders',icon:'▤'},{id:'customers',ar:'العملاء',en:'Customers',icon:'♙'},
+    {id:'orders',ar:'الطلبات',en:'Orders',icon:'▤'},...(profile?.business_type==='services'?[{id:'appointments',ar:'الحجوزات',en:'Appointments',icon:'◷'}]:[]),{id:'customers',ar:'العملاء',en:'Customers',icon:'♙'},
     {id:'inventory',ar:'المخزون',en:'Inventory',icon:'▥'},{id:'marketing',ar:'التسويق',en:'Marketing',icon:'✦'},
     {id:'reports',ar:'التقارير',en:'Analytics',icon:'▧'},{id:'website',ar:'الموقع والقوالب',en:'Website builder',icon:'◫'},
     {id:'integrations',ar:'التكاملات',en:'Integrations',icon:'⌘'},{id:'staff',ar:'الموظفون',en:'Team & roles',icon:'♧'},
