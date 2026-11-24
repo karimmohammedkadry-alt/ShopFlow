@@ -52,7 +52,9 @@ function App() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
-  const [profile, setProfile] = useState(null);\n  const [workspaceOwnerId, setWorkspaceOwnerId] = useState(null);\n  const [isStoreOwner, setIsStoreOwner] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [workspaceOwnerId, setWorkspaceOwnerId] = useState(null);
+  const [isStoreOwner, setIsStoreOwner] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [storeUrl, setStoreUrl] = useState('');
