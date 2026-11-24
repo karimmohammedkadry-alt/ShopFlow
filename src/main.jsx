@@ -131,7 +131,7 @@ function App() {
   }
 
   async function loadTrial() {
-    const { data, error } = await supabase.rpc('get_my_trial');
+    await supabase.functions.invoke('accept-team-invite',{body:{}});\n    const { data, error } = await supabase.rpc('get_my_workspace_trial');
     if (error) setMessage('تعذر تحميل حالة التجربة. تأكد من تشغيل ملف إعداد قاعدة البيانات في Supabase.');
     else setTrial(data);
   }
@@ -191,7 +191,7 @@ function App() {
 
   async function startTrial() {
     setBusy(true); setMessage('');
-    const { error } = await supabase.rpc('start_my_trial');
+    const { error } = await supabase.rpc('start_my_workspace_trial');
     if (error) setMessage('لم نتمكن من بدء التجربة. راجع إعداد قاعدة البيانات.');
     else await loadTrial();
     setBusy(false);
