@@ -188,3 +188,71 @@ using (is_active = true and exists (
   select 1 from public.shopflow_pages p
   where p.user_id = shopflow_products.user_id and p.is_published = true
 ));
+
+
+-- Workspace trial is shared with accepted team members.
+create or replace function public.shopflow_workspace_owner_id()
+returns uuid language sql stable security definer set search_path = public
+as $$
+  select coalesce(
+    (select m.owner_id from public.shopflow_team_members m
+     where m.member_user_id = auth.uid() and m.invite_status = 'accepted' limit 1),
+    auth.uid()
+  );
+$$;
+revoke all on function public.shopflow_workspace_owner_id() from public;
+grant execute on function public.shopflow_workspace_owner_id() to authenticated;
+
+create or replace function public.get_my_workspace_trial()
+returns json language sql security definer set search_path = public
+as $$
+  select coalesce(
+    (select json_build_object('started_at',t.started_at)
+     from public.shopflow_trials t where t.user_id=public.shopflow_workspace_owner_id()),
+    'null'::json
+  );
+$$;
+create or replace function public.start_my_workspace_trial()
+returns timestamptz language plpgsql security definer set search_path = public
+as $$
+declare workspace_id uuid; trial_start timestamptz;
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  workspace_id := public.shopflow_workspace_owner_id();
+  insert into public.shopflow_trials(user_id) values(workspace_id) on conflict(user_id) do nothing;
+  select started_at into trial_start from public.shopflow_trials where user_id=workspace_id;
+  return trial_start;
+end;
+$$;
+grant execute on function public.get_my_workspace_trial() to authenticated;
+grant execute on function public.start_my_workspace_trial() to authenticated;
+
+create or replace function public.shopflow_get_analytics_summary(p_from timestamptz, p_to timestamptz)
+returns jsonb language sql stable security invoker set search_path = public
+as $$
+  with workspace as (select public.shopflow_workspace_owner_id() as owner_id),
+  filtered as (
+    select e.* from public.shopflow_analytics_events e, workspace w
+    where e.user_id=w.owner_id and e.created_at >= p_from and e.created_at < p_to
+  ),
+  totals as (
+    select count(*) filter (where event_name='page_view') as page_views,
+      count(distinct visitor_id) as visitors,count(distinct session_id) as sessions,
+      count(*) filter (where event_name='purchase') as purchases,
+      coalesce(sum(event_value) filter (where event_name='purchase'),0) as tracked_revenue
+    from filtered
+  ),
+  sources as (
+    select coalesce(nullif(utm_source,''),'direct') as source,count(distinct session_id) as sessions
+    from filtered group by 1 order by sessions desc limit 8
+  ),
+  pages as (
+    select page_path,count(*) as views from filtered where event_name='page_view'
+    group by page_path order by views desc limit 8
+  )
+  select jsonb_build_object('page_views',totals.page_views,'visitors',totals.visitors,
+    'sessions',totals.sessions,'purchases',totals.purchases,'tracked_revenue',totals.tracked_revenue,
+    'sources',coalesce((select jsonb_agg(to_jsonb(sources)) from sources),'[]'::jsonb),
+    'pages',coalesce((select jsonb_agg(to_jsonb(pages)) from pages),'[]'::jsonb))
+  from totals;
+$$;
