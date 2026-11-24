@@ -52,7 +52,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(null);\n  const [workspaceOwnerId, setWorkspaceOwnerId] = useState(null);\n  const [isStoreOwner, setIsStoreOwner] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [storeUrl, setStoreUrl] = useState('');
@@ -85,9 +85,24 @@ function App() {
 
   async function loadProfile() {
     setProfileLoading(true);
-    const { data, error } = await supabase.from('shopflow_profiles').select('*').eq('user_id', session.user.id).maybeSingle();
-    if (error) setMessage('لازم تشغّل كود إعداد ملفات المتاجر في Supabase أولاً.');
-    else if (data) { setProfile(data); setStoreName(data.store_name || ''); setStoreUrl(data.store_url || ''); setBusinessType(data.business_type || 'general'); setLogoPreview(data.logo_url || ''); }
+    let ownerId=session.user.id;
+    let owner=true;
+    const own = await supabase.from('shopflow_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
+    let data=own.data;
+    if(!data && !own.error){
+      await supabase.functions.invoke('accept-team-invite',{body:{}});
+      const membership=await supabase.from('shopflow_team_members').select('owner_id,invite_status').eq('member_user_id',session.user.id).eq('invite_status','accepted').maybeSingle();
+      if(membership.data?.owner_id){
+        ownerId=membership.data.owner_id;owner=false;
+        const workspace=await supabase.from('shopflow_profiles').select('*').eq('user_id',ownerId).maybeSingle();
+        data=workspace.data;
+      }
+    }
+    if (own.error) setMessage('لازم تشغّل كود إعداد ملفات المتاجر في Supabase أولاً.');
+    else if (data) {
+      setWorkspaceOwnerId(ownerId);setIsStoreOwner(owner);
+      setProfile(data); setStoreName(data.store_name || ''); setStoreUrl(data.store_url || ''); setBusinessType(data.business_type || 'general'); setLogoPreview(data.logo_url || '');
+    }
     setProfileLoading(false);
   }
 
@@ -182,7 +197,7 @@ function App() {
     setBusy(false);
   }
 
-  async function logout() { await supabase.auth.signOut(); setTrial(null); setProfile(null); }
+  async function logout() { await supabase.auth.signOut(); setTrial(null); setProfile(null); setWorkspaceOwnerId(null); setIsStoreOwner(true); }
 
   if (window.location.pathname.startsWith('/store/')) return <PublicStorePage/>;
 
@@ -246,11 +261,11 @@ function App() {
         </div>
       </aside>
       <div className="dashboard-main">
-    <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span><button className="outline small" onClick={()=>setEditingProfile(true)}>{isArabic?"إعدادات المتجر":"Store settings"}</button><button className="outline small" onClick={logout}>{isArabic?"تسجيل الخروج":"Sign out"}</button></div></header>
+    <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span>{isStoreOwner&&<button className="outline small" onClick={()=>setEditingProfile(true)}>{isArabic?"إعدادات المتجر":"Store settings"}</button>}<button className="outline small" onClick={logout}>{isArabic?"تسجيل الخروج":"Sign out"}</button></div></header>
     <section className="welcome"><div><div className="eyebrow">{isArabic?"لوحة التحكم":"Dashboard"} · {({restaurant:'مطعم وكافيه',fashion:'ملابس وأزياء',electronics:'إلكترونيات',beauty:'تجميل وعناية',services:'خدمات وحجوزات',general:'متجر عام'})[profile?.business_type || 'general']}</div><h1>{isArabic?("أهلاً بك في "+(profile?.store_name||"متجرك")):("Welcome to "+(profile?.store_name||"your store"))}</h1><p className="muted">{isArabic?"ابدأ رحلتك في إدارة متجرك الإلكتروني.":"Manage your business from one workspace."}</p></div><span className="avatar">{session.user.email?.[0]?.toUpperCase()}</span></section>
     {expired ? <section className="expired card"><div className="status-icon">⌛</div><h2>انتهت فترة التجربة</h2><p>انتهت فترة التجربة المجانية لمدة 48 ساعة لهذا الحساب.</p><a className="primary link-button" href="mailto:hello@shopflow.example?subject=طلب%20تفعيل%20ShopFlow">تواصل معنا لطلب الخدمة</a></section>
     : !trial?.started_at ? <section className="trial-card card"><span className="pill">تجربة مجانية</span><h2>جرّب ShopFlow لمدة 48 ساعة</h2><p>استكشف لوحة التحكم وابدأ تجربة إدارة متجرك. يبدأ العدّ التنازلي فقط عند الضغط على الزر، والتجربة متاحة مرة واحدة لكل حساب.</p><button className="primary start" onClick={startTrial} disabled={busy}>{busy?'جاري بدء التجربة...':'ابدأ تجربتي المجانية'} <span>←</span></button><div className="fine-print">48 ساعة من لحظة البدء · لا يمكن إعادة ضبط التجربة</div></section>
-    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك</h2><p className="muted">متبقي من وقت التجربة: <strong>{hh}:{mm}:{ss}</strong></p></div><div className="clock clock-live" dir="ltr"><strong>{hh}:{mm}:{ss}</strong><small>متبقي</small></div></section><DashboardModules supabase={supabase} user={session.user} profile={profile} activeSection={activeSection} setActiveSection={setActiveSection} setMessage={setMessage} setEditingProfile={setEditingProfile} language={language}/></>}
+    : <><section className="trial-banner card"><div><span className="pill active">التجربة مفعّلة</span><h2>لوحة متجرك</h2><p className="muted">متبقي من وقت التجربة: <strong>{hh}:{mm}:{ss}</strong></p></div><div className="clock clock-live" dir="ltr"><strong>{hh}:{mm}:{ss}</strong><small>متبقي</small></div></section><DashboardModules supabase={supabase} user={session.user} profile={profile} activeSection={activeSection} setActiveSection={setActiveSection} setMessage={setMessage} setEditingProfile={setEditingProfile} language={language} workspaceOwnerId={workspaceOwnerId} isStoreOwner={isStoreOwner}/></>}
     {message && <p className="notice">{message}</p>}
       </div>
     </div>
