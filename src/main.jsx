@@ -60,12 +60,14 @@ function App() {
   const [storeUrl, setStoreUrl] = useState('');
   const [businessType, setBusinessType] = useState('general');
   const [activeSection, setActiveSection] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('shopflow-theme') || 'light');
   const [language, setLanguage] = useState(() => localStorage.getItem('shopflow-language') || 'ar');
   useEffect(() => { localStorage.setItem('shopflow-theme', theme); }, [theme]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { localStorage.setItem('shopflow-language', language); document.documentElement.lang = language; document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'; }, [language]);
 
   useEffect(() => {
@@ -158,8 +160,7 @@ function App() {
           setSession(data.session);
           setMessage('تم تأكيد الحساب بنجاح.');
         } else {
-          setOtpStep(true);
-          setMessage('تم إنشاء طلب التسجيل. لو إعدادات البريد في Supabase سليمة، هيوصلك رمز التأكيد. لو ماوصلش، راجع صندوق Spam وإعدادات SMTP و Email Templates في Supabase.');
+          setMessage('تم إنشاء الحساب، لكن Supabase ما زال يطلب تأكيد البريد. لإلغاء OTP: افتح Supabase ثم Authentication → Providers → Email وأوقف Confirm email، وبعدها جرّب التسجيل مرة أخرى.');
         }
       }
     } catch {
@@ -167,29 +168,6 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function verifyEmail(e) {
-    e.preventDefault();
-    setBusy(true);
-    setMessage('');
-    const { data, error } = await supabase.auth.verifyOtp({ email, token: otp.trim(), type: 'signup' });
-    if (error) setMessage(`تعذر تأكيد البريد: ${error.message}`);
-    else {
-      setSession(data.session);
-      setOtpStep(false);
-      setOtp('');
-      setMessage('تم تأكيد بريدك الإلكتروني وتفعيل حسابك بنجاح.');
-    }
-    setBusy(false);
-  }
-
-  async function resendOtp() {
-    setBusy(true);
-    setMessage('');
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
-    setMessage(error ? `تعذر طلب رمز جديد: ${error.message}` : 'تم قبول طلب إعادة الإرسال من Supabase. وصول الرسالة يعتمد على إعدادات البريد وSMTP.');
-    setBusy(false);
   }
 
   async function startTrial() {
@@ -211,21 +189,15 @@ function App() {
     <section className="auth-card card">
       <Brand />
       <div className="eyebrow">مساحة إدارة متجرك</div>
-      <h1>{otpStep ? 'تأكيد بريدك الإلكتروني' : mode === 'login' ? 'أهلاً بعودتك' : 'أنشئ حسابك'}</h1>
-      <p className="muted">{otpStep ? 'أدخل رمز التأكيد المكوّن من 6 أرقام المرسل إلى بريدك الإلكتروني.' : 'ابدأ إدارة متجرك الإلكتروني من لوحة واحدة بسيطة.'}</p>
-      {otpStep ? <form onSubmit={verifyEmail}>
-        <label>رمز التأكيد (OTP)</label>
-        <input className="otp-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g, '').slice(0,6))} placeholder="123456" required />
-        <button className="primary" disabled={busy || otp.length !== 6}>{busy ? 'جاري التحقق...' : 'تأكيد الحساب والدخول'}</button>
-        <button type="button" className="text-button resend" onClick={resendOtp} disabled={busy}>إعادة إرسال الرمز</button>
-      </form> : <form onSubmit={authenticate}>
+      <h1>{mode === 'login' ? 'أهلاً بعودتك' : 'أنشئ حسابك'}</h1>
+      <p className="muted">ابدأ إدارة متجرك الإلكتروني من لوحة واحدة بسيطة.</p>
+      <form onSubmit={authenticate}>
         <label>البريد الإلكتروني</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com" required />
         <label>كلمة المرور</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" minLength="6" required />
         <button className="primary" disabled={busy}>{busy ? 'لحظة من فضلك...' : mode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب'}</button>
-      </form>}
+      </form>
       {message && <p className="notice">{message}</p>}
-      {!otpStep && <p className="switch">{mode === 'login' ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'} <button className="text-button" onClick={()=>{setMode(mode==='login'?'signup':'login');setMessage('')}}>{mode==='login'?'إنشاء حساب':'تسجيل الدخول'}</button></p>}
-      {otpStep && <p className="switch">البريد المستخدم: <strong>{email}</strong> · <button className="text-button" onClick={()=>{setOtpStep(false);setOtp('');setMessage('')}}>تغيير البريد</button></p>}
+      <p className="switch">{mode === 'login' ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'} <button className="text-button" onClick={()=>{setMode(mode==='login'?'signup':'login');setMessage('')}}>{mode==='login'?'إنشاء حساب':'تسجيل الدخول'}</button></p>
     </section>
     <aside className="auth-aside"><div className="aside-content"><span className="pill">SHOPFLOW DASHBOARD</span><h2>كل تفاصيل متجرك،<br/>في مكان واحد.</h2><p>مساحة منظمة تساعدك تتابع شغلك وتدير متجرك بسهولة.</p><div className="mini-stats"><div><strong>48 ساعة</strong><span>فترة تجربة مجانية</span></div><div><strong>بسيط</strong><span>إعداد سريع</span></div></div><div className="aside-powered">Powered by <strong>CODEX</strong></div></div></aside>
   </main>;
@@ -254,17 +226,18 @@ function App() {
   ];
   return <main className={'dashboard '+(theme==='dark'?'theme-dark':'')} dir={isArabic?'rtl':'ltr'}>
     <div className="dashboard-layout">
-      <aside className="dashboard-sidebar">
+      {sidebarOpen && <button className="sidebar-backdrop" aria-label="إغلاق القائمة" onClick={()=>setSidebarOpen(false)} /> }
+      <aside className={'dashboard-sidebar '+(sidebarOpen?'sidebar-open':'')}>
         <div className="sidebar-brand"><Brand/></div>
         <div className="sidebar-store"><strong>{profile?.store_name || 'ShopFlow'}</strong><small>{isArabic?'مساحة المتجر':'Store workspace'}</small></div>
-        <nav className="sidebar-nav">{navItems.map(item=><button key={item.id} className={activeSection===item.id?'selected':''} onClick={()=>setActiveSection(item.id)}><span>{item.icon}</span>{isArabic?item.ar:item.en}</button>)}</nav>
+        <nav className="sidebar-nav">{navItems.map(item=><button key={item.id} className={activeSection===item.id?'selected':''} onClick={()=>{setActiveSection(item.id);setSidebarOpen(false);}}><span>{item.icon}</span>{isArabic?item.ar:item.en}</button>)}</nav>
         <div className="sidebar-controls">
           <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?(isArabic?'☀ الوضع الفاتح':'☀ Light mode'):(isArabic?'☾ الوضع الداكن':'☾ Dark mode')}</button>
           <button onClick={()=>setLanguage(isArabic?'en':'ar')}>{isArabic?'English':'العربية'}</button>
         </div>
       </aside>
       <div className="dashboard-main">
-    <header className="topbar"><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span>{isStoreOwner&&<button className="outline small" onClick={()=>setEditingProfile(true)}>{isArabic?"إعدادات المتجر":"Store settings"}</button>}<button className="outline small" onClick={logout}>{isArabic?"تسجيل الخروج":"Sign out"}</button></div></header>
+    <header className="topbar"><button className="mobile-menu-toggle" aria-label="فتح القائمة" aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(!sidebarOpen)}>☰</button><div className="store-brand">{profile?.logo_url ? <img src={profile.logo_url} alt="شعار المتجر"/> : <Brand/>}<div><strong>{profile?.store_name || "ShopFlow"}</strong>{profile?.store_url && <a href={profile.store_url} target="_blank" rel="noreferrer">{profile.store_url}</a>}</div></div><div className="user-menu"><span>{session.user.email}</span>{isStoreOwner&&<button className="outline small" onClick={()=>setEditingProfile(true)}>{isArabic?"إعدادات المتجر":"Store settings"}</button>}<button className="outline small" onClick={logout}>{isArabic?"تسجيل الخروج":"Sign out"}</button></div></header>
     <section className="welcome"><div><div className="eyebrow">{isArabic?"لوحة التحكم":"Dashboard"} · {({restaurant:'مطعم وكافيه',fashion:'ملابس وأزياء',electronics:'إلكترونيات',beauty:'تجميل وعناية',services:'خدمات وحجوزات',general:'متجر عام'})[profile?.business_type || 'general']}</div><h1>{isArabic?("أهلاً بك في "+(profile?.store_name||"متجرك")):("Welcome to "+(profile?.store_name||"your store"))}</h1><p className="muted">{isArabic?"ابدأ رحلتك في إدارة متجرك الإلكتروني.":"Manage your business from one workspace."}</p></div><span className="avatar">{session.user.email?.[0]?.toUpperCase()}</span></section>
     {expired ? <section className="expired card"><div className="status-icon">⌛</div><h2>انتهت فترة التجربة</h2><p>انتهت فترة التجربة المجانية لمدة 48 ساعة لهذا الحساب.</p><a className="primary link-button" href="mailto:hello@shopflow.example?subject=طلب%20تفعيل%20ShopFlow">تواصل معنا لطلب الخدمة</a></section>
     : !trial?.started_at ? <section className="trial-card card"><span className="pill">تجربة مجانية</span><h2>جرّب ShopFlow لمدة 48 ساعة</h2><p>استكشف لوحة التحكم وابدأ تجربة إدارة متجرك. يبدأ العدّ التنازلي فقط عند الضغط على الزر، والتجربة متاحة مرة واحدة لكل حساب.</p><button className="primary start" onClick={startTrial} disabled={busy}>{busy?'جاري بدء التجربة...':'ابدأ تجربتي المجانية'} <span>←</span></button><div className="fine-print">48 ساعة من لحظة البدء · لا يمكن إعادة ضبط التجربة</div></section>
